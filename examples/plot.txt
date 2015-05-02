@@ -1,0 +1,6 @@
+set key top left
+plot	"out.txt" every :::0::0 notitle with p ps 2, \
+	"out.txt" every :::1::1 title "tk" with l lt 1, \
+	"out.txt" every :::3::3 title "alglib" with l lt 2
+
+pause -1
