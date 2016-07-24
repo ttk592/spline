@@ -20,7 +20,7 @@
       if(cycles<10000)  printf("(%4.0f cycl)", cycles);     \
       else              printf("(%.1e cycl)", cycles);      \
       fflush(stdout);                                       \
-      assert(y!=-123.456789123);                            \
+      if(y==-123.456789123) printf("only to make use of y");  \
    }                                                        \
    printf("\n");                                            \
 }
