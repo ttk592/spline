@@ -32,6 +32,8 @@
 #include <vector>
 #include <algorithm>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 
 // unnamed namespace only because the implementation is in this
 // header file and we don't want to export symbols to the obj files
@@ -289,7 +291,7 @@ void spline::set_points(const std::vector<double>& x,
     assert(x.size()>2);
     m_x=x;
     m_y=y;
-    int   n=x.size();
+    int n = (int) x.size();
     // TODO: maybe sort x and y, rather than returning an error
     for(int i=0; i<n-1; i++) {
         assert(m_x[i]<m_x[i+1]);
@@ -307,12 +309,12 @@ void spline::set_points(const std::vector<double>& x,
             rhs[i]=(y[i+1]-y[i])/(x[i+1]-x[i]) - (y[i]-y[i-1])/(x[i]-x[i-1]);
         }
         // boundary conditions
-        if(m_left == spline::second_deriv) {
+        if(m_left == spline::bd_type::second_deriv) {
             // 2*b[0] = f''
             A(0,0)=2.0;
             A(0,1)=0.0;
             rhs[0]=m_left_value;
-        } else if(m_left == spline::first_deriv) {
+        } else if(m_left == spline::bd_type::first_deriv) {
             // c[0] = f', needs to be re-expressed in terms of b:
             // (2b[0]+b[1])(x[1]-x[0]) = 3 ((y[1]-y[0])/(x[1]-x[0]) - f')
             A(0,0)=2.0*(x[1]-x[0]);
@@ -321,12 +323,12 @@ void spline::set_points(const std::vector<double>& x,
         } else {
             assert(false);
         }
-        if(m_right == spline::second_deriv) {
+        if(m_right == spline::bd_type::second_deriv) {
             // 2*b[n-1] = f''
             A(n-1,n-1)=2.0;
             A(n-1,n-2)=0.0;
             rhs[n-1]=m_right_value;
-        } else if(m_right == spline::first_deriv) {
+        } else if(m_right == spline::bd_type::first_deriv) {
             // c[n-1] = f', needs to be re-expressed in terms of b:
             // (b[n-2]+2b[n-1])(x[n-1]-x[n-2])
             // = 3 (f' - (y[n-1]-y[n-2])/(x[n-1]-x[n-2]))
@@ -460,5 +462,7 @@ double spline::deriv(int order, double x) const
 
 
 } // namespace
+
+#pragma GCC diagnostic pop
 
 #endif /* TK_SPLINE_H */
