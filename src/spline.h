@@ -377,11 +377,16 @@ void spline::set_points(const std::vector<double>& x,
 
 double spline::operator() (double x) const
 {
+    // polynomial evaluation using Horner's scheme
+    // TODO: consider more numerically accurate algorithms, e.g.:
+    //   - Clenshaw
+    //   - Even-Odd method by A.C.R. Newbery
+    //   - Compensated Horner Scheme
     size_t n=m_x.size();
-    // find the closest point m_x[idx] < x, idx=0 even if x<m_x[0]
+    // find the closest point m_x[idx] <= x (set idx=0 if x<m_x[0])
     std::vector<double>::const_iterator it;
-    it=std::lower_bound(m_x.begin(),m_x.end(),x);
-    int idx=std::max( int(it-m_x.begin())-1, 0);
+    it=std::upper_bound(m_x.begin(),m_x.end(),x);       // *it > x
+    size_t idx = std::max( int(it-m_x.begin())-1, 0);   // m_x[idx] <= x
 
     double h=x-m_x[idx];
     double interpol;
@@ -401,12 +406,11 @@ double spline::operator() (double x) const
 double spline::deriv(int order, double x) const
 {
     assert(order>0);
-
     size_t n=m_x.size();
-    // find the closest point m_x[idx] < x, idx=0 even if x<m_x[0]
+    // find the closest point m_x[idx] <= x (set idx=0 if x<m_x[0])
     std::vector<double>::const_iterator it;
-    it=std::lower_bound(m_x.begin(),m_x.end(),x);
-    int idx=std::max( int(it-m_x.begin())-1, 0);
+    it=std::upper_bound(m_x.begin(),m_x.end(),x);       // *it > x
+    size_t idx = std::max( int(it-m_x.begin())-1, 0);   // m_x[idx] <= x
 
     double h=x-m_x[idx];
     double interpol;
@@ -417,7 +421,7 @@ double spline::deriv(int order, double x) const
             interpol=2.0*m_b0*h + m_c0;
             break;
         case 2:
-            interpol=2.0*m_b0*h;
+            interpol=2.0*m_b0;
             break;
         default:
             interpol=0.0;
