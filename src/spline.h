@@ -5,7 +5,7 @@
  * dependencies
  *
  * ---------------------------------------------------------------------
- * Copyright (C) 2011, 2014 Tino Kluge (ttk448 at gmail.com)
+ * Copyright (C) 2011, 2014, 2016, 2021 Tino Kluge (ttk448 at gmail.com)
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU General Public License
@@ -82,38 +82,50 @@ public:
 class spline
 {
 public:
+    // boundary condition type for the spline end-points
     enum bd_type {
         first_deriv = 1,
         second_deriv = 2
     };
 
-private:
+protected:
     std::vector<double> m_x,m_y;            // x,y coordinates of points
     // interpolation parameters
     // f(x) = a*(x-x_i)^3 + b*(x-x_i)^2 + c*(x-x_i) + y_i
     std::vector<double> m_a,m_b,m_c;        // spline coefficients
-    double  m_b0, m_c0;                     // for left extrapol
+    double  m_b0, m_c0;                     // for left extrapolation
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
     bool    m_force_linear_extrapolation;
 
 public:
-    // set default boundary condition to be zero curvature at both ends
-    spline(): m_left(second_deriv), m_right(second_deriv),
+    // default constructor: set boundary condition to be zero curvature
+    // at both ends, i.e. natural splines
+    spline(): m_left(bd_type::second_deriv), m_right(bd_type::second_deriv),
         m_left_value(0.0), m_right_value(0.0),
         m_force_linear_extrapolation(false)
     {
         ;
     }
 
-    // optional, but if called it has to come be before set_points()
+    // modify boundary conditions: if called it must be before set_points()
     void set_boundary(bd_type left, double left_value,
                       bd_type right, double right_value,
                       bool force_linear_extrapolation=false);
+
+    // set all data points (cubic_spline=false means linear interpolation)
     void set_points(const std::vector<double>& x,
                     const std::vector<double>& y, bool cubic_spline=true);
+
+    // evaluates the spline at point x
     double operator() (double x) const;
     double deriv(int order, double x) const;
+
+    // returns the input data points
+    std::vector<double> get_x() const { return m_x; }
+    std::vector<double> get_y() const { return m_y; }
+    double get_x_min() const { return m_x.at(0); }
+    double get_x_max() const { return m_x.at(m_x.size()-1); }
 };
 
 
@@ -292,7 +304,6 @@ void spline::set_points(const std::vector<double>& x,
     m_x=x;
     m_y=y;
     int n = (int) x.size();
-    // TODO: maybe sort x and y, rather than returning an error
     for(int i=0; i<n-1; i++) {
         assert(m_x[i]<m_x[i+1]);
     }
