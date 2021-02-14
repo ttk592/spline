@@ -57,7 +57,7 @@ protected:
     std::vector<double> m_x,m_y;            // x,y coordinates of points
     // interpolation parameters
     // f(x) = a_i + b_i*(x-x_i) + c_i*(x-x_i)^2 + d_i*(x-x_i)^3
-    // where a_i = y_i
+    // where a_i = y_i, or else it won't go through grid points
     std::vector<double> m_b,m_c,m_d;        // spline coefficients
     double  m_b0, m_c0;                     // for left extrapolation
     bd_type m_left, m_right;
@@ -95,7 +95,8 @@ public:
 };
 
 
-namespace internal {
+namespace internal
+{
 
 // band matrix solver
 class band_matrix
@@ -184,13 +185,13 @@ void spline::set_points(const std::vector<double>& x,
         }
         // boundary conditions
         if(m_left == spline::bd_type::second_deriv) {
-            // 2*b[0] = f''
+            // 2*c[0] = f''
             A(0,0)=2.0;
             A(0,1)=0.0;
             rhs[0]=m_left_value;
         } else if(m_left == spline::bd_type::first_deriv) {
-            // c[0] = f', needs to be re-expressed in terms of b:
-            // (2b[0]+b[1])(x[1]-x[0]) = 3 ((y[1]-y[0])/(x[1]-x[0]) - f')
+            // b[0] = f', needs to be re-expressed in terms of c:
+            // (2c[0]+c[1])(x[1]-x[0]) = 3 ((y[1]-y[0])/(x[1]-x[0]) - f')
             A(0,0)=2.0*(x[1]-x[0]);
             A(0,1)=1.0*(x[1]-x[0]);
             rhs[0]=3.0*((y[1]-y[0])/(x[1]-x[0])-m_left_value);
@@ -198,13 +199,13 @@ void spline::set_points(const std::vector<double>& x,
             assert(false);
         }
         if(m_right == spline::bd_type::second_deriv) {
-            // 2*b[n-1] = f''
+            // 2*c[n-1] = f''
             A(n-1,n-1)=2.0;
             A(n-1,n-2)=0.0;
             rhs[n-1]=m_right_value;
         } else if(m_right == spline::bd_type::first_deriv) {
-            // c[n-1] = f', needs to be re-expressed in terms of b:
-            // (b[n-2]+2b[n-1])(x[n-1]-x[n-2])
+            // b[n-1] = f', needs to be re-expressed in terms of c:
+            // (c[n-2]+2c[n-1])(x[n-1]-x[n-2])
             // = 3 (f' - (y[n-1]-y[n-2])/(x[n-1]-x[n-2]))
             A(n-1,n-1)=2.0*(x[n-1]-x[n-2]);
             A(n-1,n-2)=1.0*(x[n-1]-x[n-2]);
