@@ -91,8 +91,9 @@ public:
 protected:
     std::vector<double> m_x,m_y;            // x,y coordinates of points
     // interpolation parameters
-    // f(x) = a*(x-x_i)^3 + b*(x-x_i)^2 + c*(x-x_i) + y_i
-    std::vector<double> m_a,m_b,m_c;        // spline coefficients
+    // f(x) = a_i + b_i*(x-x_i) + c_i*(x-x_i)^2 + d_i*(x-x_i)^3
+    // where a_i = y_i
+    std::vector<double> m_b,m_c,m_d;        // spline coefficients
     double  m_b0, m_c0;                     // for left extrapolation
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
@@ -350,40 +351,40 @@ void spline::set_points(const std::vector<double>& x,
             assert(false);
         }
 
-        // solve the equation system to obtain the parameters b[]
-        m_b=A.lu_solve(rhs);
+        // solve the equation system to obtain the parameters c[]
+        m_c=A.lu_solve(rhs);
 
-        // calculate parameters a[] and c[] based on b[]
-        m_a.resize(n);
-        m_c.resize(n);
+        // calculate parameters b[] and d[] based on c[]
+        m_d.resize(n);
+        m_b.resize(n);
         for(int i=0; i<n-1; i++) {
-            m_a[i]=1.0/3.0*(m_b[i+1]-m_b[i])/(x[i+1]-x[i]);
-            m_c[i]=(y[i+1]-y[i])/(x[i+1]-x[i])
-                   - 1.0/3.0*(2.0*m_b[i]+m_b[i+1])*(x[i+1]-x[i]);
+            m_d[i]=1.0/3.0*(m_c[i+1]-m_c[i])/(x[i+1]-x[i]);
+            m_b[i]=(y[i+1]-y[i])/(x[i+1]-x[i])
+                   - 1.0/3.0*(2.0*m_c[i]+m_c[i+1])*(x[i+1]-x[i]);
         }
     } else { // linear interpolation
-        m_a.resize(n);
-        m_b.resize(n);
+        m_d.resize(n);
         m_c.resize(n);
+        m_b.resize(n);
         for(int i=0; i<n-1; i++) {
-            m_a[i]=0.0;
-            m_b[i]=0.0;
-            m_c[i]=(m_y[i+1]-m_y[i])/(m_x[i+1]-m_x[i]);
+            m_d[i]=0.0;
+            m_c[i]=0.0;
+            m_b[i]=(m_y[i+1]-m_y[i])/(m_x[i+1]-m_x[i]);
         }
     }
 
     // for left extrapolation coefficients
-    m_b0 = (m_force_linear_extrapolation==false) ? m_b[0] : 0.0;
-    m_c0 = m_c[0];
+    m_c0 = (m_force_linear_extrapolation==false) ? m_c[0] : 0.0;
+    m_b0 = m_b[0];
 
-    // for the right extrapolation coefficients
-    // f_{n-1}(x) = b*(x-x_{n-1})^2 + c*(x-x_{n-1}) + y_{n-1}
+    // for the right extrapolation coefficients (zero cubic term)
+    // f_{n-1}(x) = y_{n-1} + b*(x-x_{n-1}) + c*(x-x_{n-1})^2
     double h=x[n-1]-x[n-2];
-    // m_b[n-1] is determined by the boundary condition
-    m_a[n-1]=0.0;
-    m_c[n-1]=3.0*m_a[n-2]*h*h+2.0*m_b[n-2]*h+m_c[n-2];   // = f'_{n-2}(x_{n-1})
+    // m_c[n-1] is determined by the boundary condition
+    m_d[n-1]=0.0;
+    m_b[n-1]=3.0*m_d[n-2]*h*h+2.0*m_c[n-2]*h+m_b[n-2];   // = f'_{n-2}(x_{n-1})
     if(m_force_linear_extrapolation==true)
-        m_b[n-1]=0.0;
+        m_c[n-1]=0.0;
 }
 
 double spline::operator() (double x) const
@@ -403,13 +404,13 @@ double spline::operator() (double x) const
     double interpol;
     if(x<m_x[0]) {
         // extrapolation to the left
-        interpol=(m_b0*h + m_c0)*h + m_y[0];
+        interpol=(m_c0*h + m_b0)*h + m_y[0];
     } else if(x>m_x[n-1]) {
         // extrapolation to the right
-        interpol=(m_b[n-1]*h + m_c[n-1])*h + m_y[n-1];
+        interpol=(m_c[n-1]*h + m_b[n-1])*h + m_y[n-1];
     } else {
         // interpolation
-        interpol=((m_a[idx]*h + m_b[idx])*h + m_c[idx])*h + m_y[idx];
+        interpol=((m_d[idx]*h + m_c[idx])*h + m_b[idx])*h + m_y[idx];
     }
     return interpol;
 }
@@ -429,10 +430,10 @@ double spline::deriv(int order, double x) const
         // extrapolation to the left
         switch(order) {
         case 1:
-            interpol=2.0*m_b0*h + m_c0;
+            interpol=2.0*m_c0*h + m_b0;
             break;
         case 2:
-            interpol=2.0*m_b0;
+            interpol=2.0*m_c0;
             break;
         default:
             interpol=0.0;
@@ -442,10 +443,10 @@ double spline::deriv(int order, double x) const
         // extrapolation to the right
         switch(order) {
         case 1:
-            interpol=2.0*m_b[n-1]*h + m_c[n-1];
+            interpol=2.0*m_c[n-1]*h + m_b[n-1];
             break;
         case 2:
-            interpol=2.0*m_b[n-1];
+            interpol=2.0*m_c[n-1];
             break;
         default:
             interpol=0.0;
@@ -455,13 +456,13 @@ double spline::deriv(int order, double x) const
         // interpolation
         switch(order) {
         case 1:
-            interpol=(3.0*m_a[idx]*h + 2.0*m_b[idx])*h + m_c[idx];
+            interpol=(3.0*m_d[idx]*h + 2.0*m_c[idx])*h + m_b[idx];
             break;
         case 2:
-            interpol=6.0*m_a[idx]*h + 2.0*m_b[idx];
+            interpol=6.0*m_d[idx]*h + 2.0*m_c[idx];
             break;
         case 3:
-            interpol=6.0*m_a[idx];
+            interpol=6.0*m_d[idx];
             break;
         default:
             interpol=0.0;
