@@ -62,22 +62,19 @@ protected:
     double  m_b0, m_c0;                     // for left extrapolation
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
-    bool    m_force_linear_extrapolation;
 
 public:
     // default constructor: set boundary condition to be zero curvature
     // at both ends, i.e. natural splines
     spline(): m_left(bd_type::second_deriv), m_right(bd_type::second_deriv),
-        m_left_value(0.0), m_right_value(0.0),
-        m_force_linear_extrapolation(false)
+        m_left_value(0.0), m_right_value(0.0)
     {
         ;
     }
 
     // modify boundary conditions: if called it must be before set_points()
     void set_boundary(bd_type left, double left_value,
-                      bd_type right, double right_value,
-                      bool force_linear_extrapolation=false);
+                      bd_type right, double right_value);
 
     // set all data points (cubic_spline=false means linear interpolation)
     void set_points(const std::vector<double>& x,
@@ -148,15 +145,13 @@ public:
 // -----------------------
 
 void spline::set_boundary(spline::bd_type left, double left_value,
-                          spline::bd_type right, double right_value,
-                          bool force_linear_extrapolation)
+                          spline::bd_type right, double right_value)
 {
     assert(m_x.size()==0);          // set_points() must not have happened yet
     m_left=left;
     m_right=right;
     m_left_value=left_value;
     m_right_value=right_value;
-    m_force_linear_extrapolation=force_linear_extrapolation;
 }
 
 
@@ -237,7 +232,7 @@ void spline::set_points(const std::vector<double>& x,
     }
 
     // for left extrapolation coefficients
-    m_c0 = (m_force_linear_extrapolation==false) ? m_c[0] : 0.0;
+    m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
     m_b0 = m_b[0];
 
     // for the right extrapolation coefficients (zero cubic term)
@@ -246,8 +241,8 @@ void spline::set_points(const std::vector<double>& x,
     // m_c[n-1] is determined by the boundary condition
     m_d[n-1]=0.0;
     m_b[n-1]=3.0*m_d[n-2]*h*h+2.0*m_c[n-2]*h+m_b[n-2];   // = f'_{n-2}(x_{n-1})
-    if(m_force_linear_extrapolation==true)
-        m_c[n-1]=0.0;
+    if(m_right==bd_type::first_deriv)
+        m_c[n-1]=0.0;   // force linear extrapolation
 }
 
 double spline::operator() (double x) const
