@@ -47,6 +47,13 @@ namespace tk
 class spline
 {
 public:
+    // spline types
+    enum spline_type {
+        linear = 1,             // linear interpolation
+        cspline = 30,           // cubic splines (classical C^2)
+        cspline_hermite = 31    // cubic hermite splines (local, only C^1)
+    };
+
     // boundary condition type for the spline end-points
     enum bd_type {
         first_deriv = 1,
@@ -78,7 +85,8 @@ public:
 
     // set all data points (cubic_spline=false means linear interpolation)
     void set_points(const std::vector<double>& x,
-                    const std::vector<double>& y, bool cubic_spline=true);
+                    const std::vector<double>& y,
+                    spline_type type=spline_type::cspline);
 
     // evaluates the spline at point x
     double operator() (double x) const;
@@ -90,6 +98,7 @@ public:
     double get_x_min() const { return m_x.at(0); }
     double get_x_max() const { return m_x.at(m_x.size()-1); }
 };
+
 
 
 namespace internal
@@ -133,13 +142,10 @@ public:
 
 
 
+
 // ---------------------------------------------------------------------
 // implementation part, which could be separated into a cpp file
 // ---------------------------------------------------------------------
-
-
-
-
 
 // spline implementation
 // -----------------------
@@ -156,18 +162,38 @@ void spline::set_boundary(spline::bd_type left, double left_value,
 
 
 void spline::set_points(const std::vector<double>& x,
-                        const std::vector<double>& y, bool cubic_spline)
+                        const std::vector<double>& y,
+                        spline_type type)
 {
     assert(x.size()==y.size());
     assert(x.size()>2);
     m_x=x;
     m_y=y;
     int n = (int) x.size();
+    // check strict monotinicity of input vector x
     for(int i=0; i<n-1; i++) {
         assert(m_x[i]<m_x[i+1]);
     }
 
-    if(cubic_spline==true) { // cubic spline interpolation
+
+    if(type==spline_type::linear) {
+        // linear interpolation
+        m_d.resize(n);
+        m_c.resize(n);
+        m_b.resize(n);
+        for(int i=0; i<n-1; i++) {
+            m_d[i]=0.0;
+            m_c[i]=0.0;
+            m_b[i]=(m_y[i+1]-m_y[i])/(m_x[i+1]-m_x[i]);
+        }
+        // ignore boundary conditions, set slope equal to the last segment
+        m_b[n-1]=m_b[n-2];
+        m_c[n-1]=0.0;
+        m_d[n-1]=0.0;
+    } else if(type==spline_type::cspline) {
+        // classical cubic splines which are C^2 (twice cont differentiable)
+        // this requires solving an equation system
+
         // setting up the matrix and right hand side of the equation system
         // for the parameters b[]
         internal::band_matrix A(n,1,1);
@@ -220,29 +246,65 @@ void spline::set_points(const std::vector<double>& x,
             m_b[i]=(y[i+1]-y[i])/(x[i+1]-x[i])
                    - 1.0/3.0*(2.0*m_c[i]+m_c[i+1])*(x[i+1]-x[i]);
         }
-    } else { // linear interpolation
-        m_d.resize(n);
-        m_c.resize(n);
+        // for the right extrapolation coefficients (zero cubic term)
+        // f_{n-1}(x) = y_{n-1} + b*(x-x_{n-1}) + c*(x-x_{n-1})^2
+        double h=x[n-1]-x[n-2];
+        // m_c[n-1] is determined by the boundary condition
+        m_d[n-1]=0.0;
+        m_b[n-1]=3.0*m_d[n-2]*h*h+2.0*m_c[n-2]*h+m_b[n-2];   // = f'_{n-2}(x_{n-1})
+        if(m_right==bd_type::first_deriv)
+            m_c[n-1]=0.0;   // force linear extrapolation
+
+    } else if(type==spline_type::cspline_hermite) {
+        // hermite cubic splines which are C^1 (cont. differentiable)
+        // and derivatives are speciefied on each grid point
+        // (here we use 3-point finite differences)
         m_b.resize(n);
-        for(int i=0; i<n-1; i++) {
-            m_d[i]=0.0;
-            m_c[i]=0.0;
-            m_b[i]=(m_y[i+1]-m_y[i])/(m_x[i+1]-m_x[i]);
+        m_c.resize(n);
+        m_d.resize(n);
+        // set b to match 1st order derivative finite difference
+        for(int i=1; i<n-1; i++) {
+            const double h  = m_x[i+1]-m_x[i];
+            const double hl = m_x[i]-m_x[i-1];
+            m_b[i] = -h/(hl*(hl+h))*m_y[i-1] + (h-hl)/(hl*h)*m_y[i]
+                     +  hl/(h*(hl+h))*m_y[i+1];
         }
+        // boundary conditions determine b[0] and b[n-1]
+        if(m_left==bd_type::first_deriv) {
+            m_b[0]=m_left_value;
+        } else if(m_left==bd_type::second_deriv) {
+            const double h = m_x[1]-m_x[0];
+            m_b[0]=0.5*(-m_b[1]-0.5*m_left_value*h+3.0*(m_y[1]-m_y[0])/h);
+        } else {
+            assert(false);
+        }
+        if(m_right==bd_type::first_deriv) {
+            m_b[n-1]=m_right_value;
+            m_c[n-1]=0.0;
+        } else if(m_right==bd_type::second_deriv) {
+            const double h = m_x[n-1]-m_x[n-2];
+            m_b[n-1]=0.5*(-m_b[n-2]+0.5*m_right_value*h+3.0*(m_y[n-1]-m_y[n-2])/h);
+            m_c[n-1]=0.5*m_right_value;
+        } else {
+            assert(false);
+        }
+        m_d[n-1]=0.0;
+
+        // parameters c and d are determined by continuity and differentiability
+        for(int i=0; i<n-1; i++) {
+            const double h  = m_x[i+1]-m_x[i];
+            // from continuity and differentiability condition
+            m_c[i] = ( 3.0*(m_y[i+1]-m_y[i])/h - (2.0*m_b[i]+m_b[i+1]) ) / h;
+            // from differentiability condition
+            m_d[i] = ( (m_b[i+1]-m_b[i])/(3.0*h) - 2.0/3.0*m_c[i] ) / h;
+        }
+    } else {
+        assert(false);
     }
 
     // for left extrapolation coefficients
     m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
     m_b0 = m_b[0];
-
-    // for the right extrapolation coefficients (zero cubic term)
-    // f_{n-1}(x) = y_{n-1} + b*(x-x_{n-1}) + c*(x-x_{n-1})^2
-    double h=x[n-1]-x[n-2];
-    // m_c[n-1] is determined by the boundary condition
-    m_d[n-1]=0.0;
-    m_b[n-1]=3.0*m_d[n-2]*h*h+2.0*m_c[n-2]*h+m_b[n-2];   // = f'_{n-2}(x_{n-1})
-    if(m_right==bd_type::first_deriv)
-        m_c[n-1]=0.0;   // force linear extrapolation
 }
 
 double spline::operator() (double x) const
@@ -331,6 +393,7 @@ double spline::deriv(int order, double x) const
 }
 
 
+
 namespace internal
 {
 
@@ -373,8 +436,8 @@ double & band_matrix::operator () (int i, int j)
     assert( (i>=0) && (i<dim()) && (j>=0) && (j<dim()) );
     assert( (-num_lower()<=k) && (k<=num_upper()) );
     // k=0 -> diogonal, k<0 lower left part, k>0 upper right part
-    if(k>=0)   return m_upper[k][i];
-    else	    return m_lower[-k][i];
+    if(k>=0)    return m_upper[k][i];
+    else        return m_lower[-k][i];
 }
 double band_matrix::operator () (int i, int j) const
 {
@@ -382,8 +445,8 @@ double band_matrix::operator () (int i, int j) const
     assert( (i>=0) && (i<dim()) && (j>=0) && (j<dim()) );
     assert( (-num_lower()<=k) && (k<=num_upper()) );
     // k=0 -> diogonal, k<0 lower left part, k>0 upper right part
-    if(k>=0)   return m_upper[k][i];
-    else	    return m_lower[-k][i];
+    if(k>=0)    return m_upper[k][i];
+    else        return m_lower[-k][i];
 }
 // second diag (used in LU decomposition), saved in m_lower
 double band_matrix::saved_diag(int i) const
