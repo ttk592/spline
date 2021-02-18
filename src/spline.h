@@ -29,6 +29,7 @@
 
 #include <cstdio>
 #include <cassert>
+#include <cmath>
 #include <vector>
 #include <algorithm>
 
@@ -69,6 +70,7 @@ protected:
     double  m_b0, m_c0;                     // for left extrapolation
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
+    void set_coeffs_from_b();               // calculate c_i, d_i from b_i
 
 public:
     // default constructor: set boundary condition to be zero curvature
@@ -87,6 +89,13 @@ public:
     void set_points(const std::vector<double>& x,
                     const std::vector<double>& y,
                     spline_type type=spline_type::cspline);
+
+    // adjust coefficients so that the spline becomes piecewise monotonic
+    // where possible
+    //   this is done by adjusting slopes at grid points by a non-negative
+    //   factor and this will break C^2
+    // returns false if no adjustments have been made, true otherwise
+    bool make_monotonic();
 
     // evaluates the spline at point x
     double operator() (double x) const;
@@ -160,6 +169,26 @@ void spline::set_boundary(spline::bd_type left, double left_value,
     m_right_value=right_value;
 }
 
+
+void spline::set_coeffs_from_b()
+{
+    assert(m_x.size()==m_y.size());
+    assert(m_x.size()==m_b.size());
+    assert(m_x.size()>2);
+    size_t n=m_b.size();
+    if(m_c.size()!=n)
+        m_c.resize(n);
+    if(m_d.size()!=n)
+        m_d.resize(n);
+
+    for(size_t i=0; i<n-1; i++) {
+        const double h  = m_x[i+1]-m_x[i];
+        // from continuity and differentiability condition
+        m_c[i] = ( 3.0*(m_y[i+1]-m_y[i])/h - (2.0*m_b[i]+m_b[i+1]) ) / h;
+        // from differentiability condition
+        m_d[i] = ( (m_b[i+1]-m_b[i])/(3.0*h) - 2.0/3.0*m_c[i] ) / h;
+    }
+}
 
 void spline::set_points(const std::vector<double>& x,
                         const std::vector<double>& y,
@@ -291,13 +320,8 @@ void spline::set_points(const std::vector<double>& x,
         m_d[n-1]=0.0;
 
         // parameters c and d are determined by continuity and differentiability
-        for(int i=0; i<n-1; i++) {
-            const double h  = m_x[i+1]-m_x[i];
-            // from continuity and differentiability condition
-            m_c[i] = ( 3.0*(m_y[i+1]-m_y[i])/h - (2.0*m_b[i]+m_b[i+1]) ) / h;
-            // from differentiability condition
-            m_d[i] = ( (m_b[i+1]-m_b[i])/(3.0*h) - 2.0/3.0*m_c[i] ) / h;
-        }
+        set_coeffs_from_b();
+
     } else {
         assert(false);
     }
@@ -305,6 +329,40 @@ void spline::set_points(const std::vector<double>& x,
     // for left extrapolation coefficients
     m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
     m_b0 = m_b[0];
+}
+
+bool spline::make_monotonic()
+{
+    assert(m_x.size()==m_y.size());
+    assert(m_x.size()==m_b.size());
+    assert(m_x.size()>2);
+    bool modified = false;
+    int n=(int)m_x.size();
+    for(int i=0; i<n-1; i++)
+    {
+        double h = m_x[i+1]-m_x[i];
+        double avg = (m_y[i+1]-m_y[i])/h;
+        if( avg==0.0 && (m_b[i]!=0.0 || m_b[i+1]!=0.0) ) {
+            modified=true;
+            m_b[i]=0.0;
+            m_b[i+1]=0.0;
+        } else if( (m_b[i]>=0.0 && avg>0.0) || (m_b[i]<=0.0 && avg<0.0  ) ) {
+            // input data is monotonic
+            double r = sqrt(m_b[i]*m_b[i]+m_b[i+1]*m_b[i+1])/avg;
+            if(r>3.0) {
+                // sufficient criteria for monotonicity: r<=3
+                // adjust b[i] and b[i+1]
+                modified=true;
+                m_b[i]   *= (3.0/r);
+                m_b[i+1] *= (3.0/r);
+            }
+        }
+    }
+
+    if(modified==true)
+        set_coeffs_from_b();
+
+    return modified;
 }
 
 double spline::operator() (double x) const
