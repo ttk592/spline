@@ -75,6 +75,7 @@ protected:
     double  m_left_value, m_right_value;
     bool m_made_monotonic;
     void set_coeffs_from_b();               // calculate c_i, d_i from b_i
+    size_t find_closest(double x) const;    // closest idx so that m_x[idx]<=x
 
 public:
     // default constructor: set boundary condition to be zero curvature
@@ -205,6 +206,7 @@ void spline::set_points(const std::vector<double>& x,
     assert(x.size()==y.size());
     assert(x.size()>2);
     m_type=type;
+    m_made_monotonic=false;
     m_x=x;
     m_y=y;
     int n = (int) x.size();
@@ -377,6 +379,15 @@ bool spline::make_monotonic()
     return modified;
 }
 
+// return the closest idx so that m_x[idx] <= x (return 0 if x<m_x[0])
+size_t spline::find_closest(double x) const
+{
+    std::vector<double>::const_iterator it;
+    it=std::upper_bound(m_x.begin(),m_x.end(),x);       // *it > x
+    size_t idx = std::max( int(it-m_x.begin())-1, 0);   // m_x[idx] <= x
+    return idx;
+}
+
 double spline::operator() (double x) const
 {
     // polynomial evaluation using Horner's scheme
@@ -385,10 +396,7 @@ double spline::operator() (double x) const
     //   - Even-Odd method by A.C.R. Newbery
     //   - Compensated Horner Scheme
     size_t n=m_x.size();
-    // find the closest point m_x[idx] <= x (set idx=0 if x<m_x[0])
-    std::vector<double>::const_iterator it;
-    it=std::upper_bound(m_x.begin(),m_x.end(),x);       // *it > x
-    size_t idx = std::max( int(it-m_x.begin())-1, 0);   // m_x[idx] <= x
+    size_t idx=find_closest(x);
 
     double h=x-m_x[idx];
     double interpol;
@@ -409,10 +417,7 @@ double spline::deriv(int order, double x) const
 {
     assert(order>0);
     size_t n=m_x.size();
-    // find the closest point m_x[idx] <= x (set idx=0 if x<m_x[0])
-    std::vector<double>::const_iterator it;
-    it=std::upper_bound(m_x.begin(),m_x.end(),x);       // *it > x
-    size_t idx = std::max( int(it-m_x.begin())-1, 0);   // m_x[idx] <= x
+    size_t idx = find_closest(x);
 
     double h=x-m_x[idx];
     double interpol;
