@@ -32,6 +32,8 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <sstream>
+#include <string>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -50,7 +52,7 @@ class spline
 public:
     // spline types
     enum spline_type {
-        linear = 1,             // linear interpolation
+        linear = 10,            // linear interpolation
         cspline = 30,           // cubic splines (classical C^2)
         cspline_hermite = 31    // cubic hermite splines (local, only C^1)
     };
@@ -68,15 +70,18 @@ protected:
     // where a_i = y_i, or else it won't go through grid points
     std::vector<double> m_b,m_c,m_d;        // spline coefficients
     double  m_b0, m_c0;                     // for left extrapolation
+    spline_type m_type;
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
+    bool m_made_monotonic;
     void set_coeffs_from_b();               // calculate c_i, d_i from b_i
 
 public:
     // default constructor: set boundary condition to be zero curvature
     // at both ends, i.e. natural splines
-    spline(): m_left(bd_type::second_deriv), m_right(bd_type::second_deriv),
-        m_left_value(0.0), m_right_value(0.0)
+    spline(): m_type(spline_type::cspline),
+        m_left(bd_type::second_deriv), m_right(bd_type::second_deriv),
+        m_left_value(0.0), m_right_value(0.0), m_made_monotonic(false)
     {
         ;
     }
@@ -106,6 +111,9 @@ public:
     std::vector<double> get_y() const { return m_y; }
     double get_x_min() const { return m_x.at(0); }
     double get_x_max() const { return m_x.at(m_x.size()-1); }
+
+    // spline info string, i.e. spline type, boundary conditions etc.
+    std::string info() const;
 };
 
 
@@ -196,6 +204,7 @@ void spline::set_points(const std::vector<double>& x,
 {
     assert(x.size()==y.size());
     assert(x.size()>2);
+    m_type=type;
     m_x=x;
     m_y=y;
     int n = (int) x.size();
@@ -360,7 +369,10 @@ bool spline::make_monotonic()
     }
 
     if(modified==true)
+    {
         set_coeffs_from_b();
+        m_made_monotonic=true;
+    }
 
     return modified;
 }
@@ -450,6 +462,18 @@ double spline::deriv(int order, double x) const
     return interpol;
 }
 
+std::string spline::info() const
+{
+    std::stringstream ss;
+    ss << "type " << m_type << ", left boundary deriv " << m_left << " = ";
+    ss << m_left_value << ", right boundary deriv " << m_right << " = ";
+    ss << m_right_value << std::endl;
+    if(m_made_monotonic)
+    {
+        ss << "(spline has been adjusted for piece-wise monotonicity)";
+    }
+    return ss.str();
+}
 
 
 namespace internal
