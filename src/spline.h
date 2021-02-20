@@ -197,6 +197,10 @@ void spline::set_coeffs_from_b()
         // from differentiability condition
         m_d[i] = ( (m_b[i+1]-m_b[i])/(3.0*h) - 2.0/3.0*m_c[i] ) / h;
     }
+
+    // for left extrapolation coefficients
+    m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
+    m_b0 = m_b[0];
 }
 
 void spline::set_points(const std::vector<double>& x,
