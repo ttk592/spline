@@ -86,6 +86,23 @@ public:
     {
         ;
     }
+    spline(const std::vector<double>& X, const std::vector<double>& Y,
+           spline_type type = spline_type::cspline,
+           bool make_monotonic = false,
+           bd_type left  = bd_type::second_deriv, double left_value  = 0.0,
+           bd_type right = bd_type::second_deriv, double right_value = 0.0
+          ):
+        m_type(type),
+        m_left(left), m_right(right),
+        m_left_value(left_value), m_right_value(right_value),
+        m_made_monotonic(false) // false correct here: make_monotonic() sets it
+    {
+        this->set_points(X,Y,m_type);
+        if(make_monotonic) {
+            this->make_monotonic();
+        }
+    }
+
 
     // modify boundary conditions: if called it must be before set_points()
     void set_boundary(bd_type left, double left_value,
@@ -136,11 +153,11 @@ public:
     int dim() const;                             // matrix dimension
     int num_upper() const
     {
-        return m_upper.size()-1;
+        return (int)m_upper.size()-1;
     }
     int num_lower() const
     {
-        return m_lower.size()-1;
+        return (int)m_lower.size()-1;
     }
     // access operator
     double & operator () (int i, int j);            // write
@@ -353,8 +370,7 @@ bool spline::make_monotonic()
     assert(m_x.size()>2);
     bool modified = false;
     int n=(int)m_x.size();
-    for(int i=0; i<n-1; i++)
-    {
+    for(int i=0; i<n-1; i++) {
         double h = m_x[i+1]-m_x[i];
         double avg = (m_y[i+1]-m_y[i])/h;
         if( avg==0.0 && (m_b[i]!=0.0 || m_b[i+1]!=0.0) ) {
@@ -374,8 +390,7 @@ bool spline::make_monotonic()
         }
     }
 
-    if(modified==true)
-    {
+    if(modified==true) {
         set_coeffs_from_b();
         m_made_monotonic=true;
     }
@@ -477,8 +492,7 @@ std::string spline::info() const
     ss << "type " << m_type << ", left boundary deriv " << m_left << " = ";
     ss << m_left_value << ", right boundary deriv " << m_right << " = ";
     ss << m_right_value << std::endl;
-    if(m_made_monotonic)
-    {
+    if(m_made_monotonic) {
         ss << "(spline has been adjusted for piece-wise monotonicity)";
     }
     return ss.str();
