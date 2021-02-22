@@ -6,37 +6,54 @@ IALGLIB=-I$(ALGLIB)/src
 
 # compiler setting
 CC=g++
-CFLAGS = ${IALGLIB} -I../src
-CFLAGS += -O2 -DNDEBUG
-CFLAGS += -Wall
+CFLAGS = ${IALGLIB} -I../src -std=c++11 -Wall -Wextra
+CFLAGS += -O2
+#CFLAGS += -DNDEBUG			# disables all assert() checks
+#CFLAGS +=-D_GLIBCXX_USE_CXX11_ABI=0	# for new gcc & boost compiled with old
 LFLAGS=
 
 
-
-PROGS=demo interpol check_alglib interpol_alglib bench
+PROGS=simple_demo plot plot_avg_preserv plot_parametric
+PROGS_ALGLIB=plot_alglib bench
+PROGS_TESTS=tests/unit_tests tests/compile_units
 
 all:		${PROGS}
+more:		${PROGS_ALGLIB}
+tests:		${PROGS_TESTS}
+		./tests/unit_tests
 
-demo:		demo.o
+
+simple_demo:	simple_demo.o
+		${CC} $< -o $@
+plot:		plot.o
+		${CC} $< -o $@
+plot_avg_preserv:	plot_avg_preserv.o
+		${CC} $< -o $@
+plot_parametric:	plot_parametric.o
 		${CC} $< -o $@
 
-interpol:	interpol.o
-		${CC} $< -o $@
+tests/compile_units:	tests/compile_units.o tests/myfunc1.o tests/myfunc2.o
+		${CC} $? -o $@ 
+tests/unit_tests:	tests/unit_tests.o
+		${CC} $< -o $@ -lboost_unit_test_framework
+
+%.o: 		%.cpp ../src/spline.h
+		${CC} ${CFLAGS} -c $< -o $@
+
+tests/%.o:	tests/%.cpp ../src/spline.h
+		${CC} ${CFLAGS} -Werror -c $< -o $@
+
 
 check_alglib:
 ifeq ($(wildcard $(ALGLIB)),)
-  $(error Please install ALGLIB and adjust the corresponding variables within this Makefile)
+	$(error Please install ALGLIB and adjust the corresponding variables within this Makefile)
 endif
 
-interpol_alglib:	interpol_alglib.o
-		${CC} $< -o $@ ${LALGLIB}
+plot_alglib:	check_alglib plot_alglib.o
+		${CC} plot_alglib.o -o $@ ${LALGLIB}
+bench:		check_alglib bench.o
+		${CC} bench.o -o $@ ${LALGLIB}
 
-bench:		bench.o
-		${CC} $< -o $@ ${LALGLIB}
-
-
-%.o: %.cpp
-		${CC} ${CFLAGS} -c $< -o $@
 
 clean:
-		rm -f *.o ${PROGS} *.csv
+		rm -f *.o tests/*.o ${PROGS} ${PROGS_ALGLIB} ${PROGS_TESTS}  *.csv

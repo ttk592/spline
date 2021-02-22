@@ -1,6 +1,6 @@
 #!/bin/bash
-./plot $@ > plot.csv
+./plot_alglib $@ > plot.csv
 return_value=$?
 if [ $return_value -eq 0 ] ; then
-	gnuplot plot.gp
+	gnuplot plot_alglib.gp
 fi
