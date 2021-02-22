@@ -117,6 +117,8 @@ public:
     // where possible
     //   this is done by adjusting slopes at grid points by a non-negative
     //   factor and this will break C^2
+    //   this can also break boundary conditions if adjustments need to
+    //   be made at the boundary points
     // returns false if no adjustments have been made, true otherwise
     bool make_monotonic();
 
@@ -162,7 +164,7 @@ public:
     // access operator
     double & operator () (int i, int j);            // write
     double   operator () (int i, int j) const;      // read
-    // we can store an additional diogonal (in m_lower)
+    // we can store an additional diagonal (in m_lower)
     double& saved_diag(int i);
     double  saved_diag(int i) const;
     void lu_decompose();
@@ -231,7 +233,7 @@ void spline::set_points(const std::vector<double>& x,
     m_x=x;
     m_y=y;
     int n = (int) x.size();
-    // check strict monotinicity of input vector x
+    // check strict monotonicity of input vector x
     for(int i=0; i<n-1; i++) {
         assert(m_x[i]<m_x[i+1]);
     }
@@ -318,7 +320,7 @@ void spline::set_points(const std::vector<double>& x,
 
     } else if(type==spline_type::cspline_hermite) {
         // hermite cubic splines which are C^1 (cont. differentiable)
-        // and derivatives are speciefied on each grid point
+        // and derivatives are specified on each grid point
         // (here we use 3-point finite differences)
         m_b.resize(n);
         m_c.resize(n);
@@ -540,7 +542,7 @@ double & band_matrix::operator () (int i, int j)
     int k=j-i;       // what band is the entry
     assert( (i>=0) && (i<dim()) && (j>=0) && (j<dim()) );
     assert( (-num_lower()<=k) && (k<=num_upper()) );
-    // k=0 -> diogonal, k<0 lower left part, k>0 upper right part
+    // k=0 -> diagonal, k<0 lower left part, k>0 upper right part
     if(k>=0)    return m_upper[k][i];
     else        return m_lower[-k][i];
 }
@@ -549,7 +551,7 @@ double band_matrix::operator () (int i, int j) const
     int k=j-i;       // what band is the entry
     assert( (i>=0) && (i<dim()) && (j>=0) && (j<dim()) );
     assert( (-num_lower()<=k) && (k<=num_upper()) );
-    // k=0 -> diogonal, k<0 lower left part, k>0 upper right part
+    // k=0 -> diagonal, k<0 lower left part, k>0 upper right part
     if(k>=0)    return m_upper[k][i];
     else        return m_lower[-k][i];
 }
