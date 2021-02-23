@@ -20,15 +20,19 @@ $ make tests	# builds and runs several tests
 	They all produce numerical output which can be used with [Gnuplot](http://www.gnuplot.info/) for visualisation. Shell scripts are provided to do this in one step: `./plot*.sh` (or manually: `./plot > plot.csv`, `gnuplot plot.gp`).
   * `plot.cpp`: plot splines, e.g.
 	```
-	$ ./plot.sh -t hermite -x 0.0 0.5 1.5 2.0 -y 1.1 0.9 0.5 0.7
+	$ ./plot.sh -t hermite -x 0 0.5 1.5 2 -y 1.1 0.9 0.5 0.7
 	```
   * `plot_avg_preserv.cpp`: plots **average preserving** (area preserving/mass preserving) splines. These are splines which do not interpolate points but which have an average value in the interval [x<sub>i</sub>, x<sub>i+1</sub>] equal to y<sub>i</sub>.
 	```
 	$ ./plot_avg_preserv.sh -t cspline 
 	```
-  * `plot_parametric.cpp`: plots a **parametric spline**, i.e. connects points in a 2D-plane, where the x-coordinates do no longer need to be strictly increasing.
+  * `plot_parametric.cpp`: plots a **parametric spline**, i.e. connects points in a 2D-plane, where the x-coordinates do no longer need to be strictly increasing. Add the `-c` flag to draw a closed curve.
 	```
-	$ ./plot_parametric.sh -t hermite
+	$ ./plot_parametric.sh -x 0 0 1 2 2 1 -y 0 1 0.5 0 1 0.5 -c
+	```
+  * `plot_bspline.cpp`: plots a spline as a linear combination of cubic **b-splines** (basis splines) and compares it with splines implemented here. The `-b` flag specifies the coefficients for the b-splines (`tk::spline::cspline` with zero second derivative boundary conditions is identical to the results of b-splines).
+	```
+	$ ./plot_bspline.sh -b 1 0 0 0 1.5 -t cspline
 	```
 
 ### Example files (which require ALGLIB)
@@ -40,7 +44,7 @@ $ make tests	# builds and runs several tests
 	spline creation: loops=2e+04,   0.200s (2.4e+04 cycl)   0.202s (2.4e+04 cycl)
 	grid transform:  loops=2e+04,   0.250s (3.0e+04 cycl)   0.193s (2.3e+04 cycl)
 	```
-* `plot_alglib.cpp`: plots ALGLIB spline against this spline implementation (does not have any command line options)
+* `plot_alglib.cpp`: plots ALGLIB spline against this spline implementation (does not have any command line options).
 	```
 	$ ./plot_alglib.sh
 	```
