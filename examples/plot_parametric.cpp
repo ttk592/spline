@@ -13,19 +13,21 @@ void print_usage(const char* progname)
     printf( "usage: %s: \n"
             "\t[-h] help\n"
             "\t[-t <spline type: cspline, hermite, linear>]\n"
-            "\t[-m] force piece-wise monotonicity \n"
+            "\t[-m] force piece-wise monotonicity of the X(t) and Y(t) spline \n"
+            "\t[-c] create a closed curve\n"
             "\t[-x <x1> <x2> <x3> [x4] ... [xn]]\n"
             "\t[-y <y1> <y2> <y3> [y4] ... [yn]] \n", progname);
 }
 
 void parse_args(int argc, char** argv,
                 std::vector<double>& X, std::vector<double>& Y,
-                tk::spline::spline_type& type, bool& make_monotonic)
+                tk::spline::spline_type& type, bool& make_monotonic,
+                bool& closed_curve)
 {
     int opt;
     bool x_provided=false;
     bool y_provided=false;
-    while( (opt = getopt(argc, argv, "ht:mx:y:")) != -1) {
+    while( (opt = getopt(argc, argv, "ht:mcx:y:")) != -1) {
         switch( opt ) {
         case 'h':
             print_usage(argv[0]);
@@ -45,6 +47,9 @@ void parse_args(int argc, char** argv,
             break;
         case 'm':
             make_monotonic=true;
+            break;
+        case 'c':
+            closed_curve=true;
             break;
         case 'x':
             x_provided=true;
@@ -106,6 +111,61 @@ double sqr(double x)
     return x*x;
 }
 
+
+void create_time_grid(std::vector<double>& T, double& tmin, double& tmax,
+                      std::vector<double>& X, std::vector<double>& Y, bool is_closed_curve)
+{
+
+    assert(X.size()==Y.size() && X.size()>2);
+
+    // hack for closed curves (so that it closes smoothly):
+    //  - append the same grid points a few times so that the spline
+    //    effectively runs through the closed curve a few times
+    //  - then we only use the last loop
+    //  - if periodic boundary conditions were implemented then
+    //    simply setting periodic bd conditions for both x and y
+    //    splines is sufficient and this hack would not be needed
+    int idx_first=-1, idx_last=-1;
+    if(is_closed_curve) {
+        // remove last point if it is identical to the first
+        if(X[0]==X.back() && Y[0]==Y.back()) {
+            X.pop_back();
+            Y.pop_back();
+        }
+
+        const int num_loops=3;  // number of times we go through the closed loop
+        std::vector<double> Xcopy, Ycopy;
+        for(int i=0; i<num_loops; i++) {
+            Xcopy.insert(Xcopy.end(), X.begin(), X.end());
+            Ycopy.insert(Ycopy.end(), Y.begin(), Y.end());
+        }
+        idx_last  = (int)Xcopy.size()-1;
+        idx_first = idx_last - (int)X.size();
+        X = Xcopy;
+        Y = Ycopy;
+
+        // add first point to the end (so that the curve closes)
+        X.push_back(X[0]);
+        Y.push_back(Y[0]);
+    }
+
+    // setup a "time variable" so that we can interpolate x and y
+    // coordinates as a function of time: (X(t), Y(t))
+    T.resize(X.size());
+    T[0]=0.0;
+    for(size_t i=1; i<T.size(); i++) {
+        // time is proportional to the distance, i.e. we go at a const speed
+        T[i] = T[i-1] + sqrt( sqr(X[i]-X[i-1]) + sqr(Y[i]-Y[i-1]) );
+    }
+    if(idx_first<0 || idx_last<0) {
+        tmin = T[0] - 0.0;
+        tmax = T.back() + 0.0;
+    } else {
+        tmin = T[idx_first];
+        tmax = T[idx_last];
+    }
+}
+
 int main(int argc, char** argv)
 {
     // default parameters
@@ -113,17 +173,23 @@ int main(int argc, char** argv)
     std::vector<double> Y = {1.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0};
     tk::spline::spline_type type = tk::spline::cspline;
     bool make_monotonic = false;
+    bool is_closed_curve = false;
 
     // override defaults with command line arguments if supplied
-    parse_args(argc, argv, X, Y, type, make_monotonic);
+    parse_args(argc, argv, X, Y, type, make_monotonic, is_closed_curve);
 
-    // setup parametric spline
-    // introduce a "time variable"
-    std::vector<double> T(X.size());
-    T[0]=0.0;
-    for(size_t i=1; i<T.size(); i++) {
-        T[i] = T[i-1] + sqrt( sqr(X[i]-X[i-1]) + sqr(Y[i]-Y[i-1]) );
+    // output X,Y points for gnuplot
+    printf("# input x, input y\n");
+    for(size_t i=0; i<X.size(); i++) {
+        printf("%f %f\n", X[i], Y[i]);  // input grid points
     }
+    printf("\n");
+
+    // setup auxiliary "time grid"
+    double tmin = 0.0, tmax = 0.0;
+    std::vector<double> T;
+    create_time_grid(T,tmin,tmax,X,Y,is_closed_curve);
+
     // define a spline for each coordinate x, y
     tk::spline sx, sy;
     sx.set_points(T,X,type);
@@ -135,14 +201,7 @@ int main(int argc, char** argv)
     }
 
     // evaluates spline and outputs data to be used with gnuplot
-    printf("# input x, input y\n");
-    for(size_t i=0; i<X.size(); i++) {
-        printf("%f %f\n", X[i], Y[i]);  // input grid points
-    }
-    printf("\n");
     int n = 1000;    // number of grid points to plot the spline
-    double tmin = T[0] - 0.5;
-    double tmax = T.back() + 0.5;
     printf("# t, sx(t), sy(t)\n");
     for(int i=0; i<n; i++) {
         double t = tmin + (double)i*(tmax-tmin)/(n-1);
