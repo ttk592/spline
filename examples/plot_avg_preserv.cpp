@@ -190,8 +190,9 @@ int main(int argc, char** argv)
     printf("%f %f\n", X.back(), avg.back());
     printf("\n");
     int n = 1000;    // number of grid points to plot the spline
-    double xmin = X[0] - 0.5;
-    double xmax = X.back() + 0.5;
+    double margin = 0.0;
+    double xmin = X[0] - margin;
+    double xmax = X.back() + margin;
     printf("# x, s'(x), s''(x), s'''(x)\n");
     for(int i=0; i<n; i++) {
         double x = xmin + (double)i*(xmax-xmin)/(n-1);
