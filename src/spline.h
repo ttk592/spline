@@ -32,9 +32,15 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#ifdef HAVE_SSTREAM
 #include <sstream>
 #include <string>
+#endif // HAVE_SSTREAM
 
+// not ideal but disable unused-function warnings
+// (we get them because we have implementations in the header file,
+// and this is because we want to be able to quickly separate them
+// into a cpp file if necessary)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 
@@ -80,17 +86,17 @@ protected:
 public:
     // default constructor: set boundary condition to be zero curvature
     // at both ends, i.e. natural splines
-    spline(): m_type(spline_type::cspline),
-        m_left(bd_type::second_deriv), m_right(bd_type::second_deriv),
+    spline(): m_type(cspline),
+        m_left(second_deriv), m_right(second_deriv),
         m_left_value(0.0), m_right_value(0.0), m_made_monotonic(false)
     {
         ;
     }
     spline(const std::vector<double>& X, const std::vector<double>& Y,
-           spline_type type = spline_type::cspline,
+           spline_type type = cspline,
            bool make_monotonic = false,
-           bd_type left  = bd_type::second_deriv, double left_value  = 0.0,
-           bd_type right = bd_type::second_deriv, double right_value = 0.0
+           bd_type left  = second_deriv, double left_value  = 0.0,
+           bd_type right = second_deriv, double right_value = 0.0
           ):
         m_type(type),
         m_left(left), m_right(right),
@@ -111,7 +117,7 @@ public:
     // set all data points (cubic_spline=false means linear interpolation)
     void set_points(const std::vector<double>& x,
                     const std::vector<double>& y,
-                    spline_type type=spline_type::cspline);
+                    spline_type type=cspline);
 
     // adjust coefficients so that the spline becomes piecewise monotonic
     // where possible
@@ -129,11 +135,14 @@ public:
     // returns the input data points
     std::vector<double> get_x() const { return m_x; }
     std::vector<double> get_y() const { return m_y; }
-    double get_x_min() const { return m_x.at(0); }
-    double get_x_max() const { return m_x.at(m_x.size()-1); }
+    double get_x_min() const { assert(!m_x.empty()); return m_x.front(); }
+    double get_x_max() const { assert(!m_x.empty()); return m_x.back(); }
 
+#ifdef HAVE_SSTREAM
     // spline info string, i.e. spline type, boundary conditions etc.
     std::string info() const;
+#endif // HAVE_SSTREAM
+
 };
 
 
@@ -218,7 +227,7 @@ void spline::set_coeffs_from_b()
     }
 
     // for left extrapolation coefficients
-    m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
+    m_c0 = (m_left==first_deriv) ? 0.0 : m_c[0];
     m_b0 = m_b[0];
 }
 
@@ -239,7 +248,7 @@ void spline::set_points(const std::vector<double>& x,
     }
 
 
-    if(type==spline_type::linear) {
+    if(type==linear) {
         // linear interpolation
         m_d.resize(n);
         m_c.resize(n);
@@ -253,7 +262,7 @@ void spline::set_points(const std::vector<double>& x,
         m_b[n-1]=m_b[n-2];
         m_c[n-1]=0.0;
         m_d[n-1]=0.0;
-    } else if(type==spline_type::cspline) {
+    } else if(type==cspline) {
         // classical cubic splines which are C^2 (twice cont differentiable)
         // this requires solving an equation system
 
@@ -268,12 +277,12 @@ void spline::set_points(const std::vector<double>& x,
             rhs[i]=(y[i+1]-y[i])/(x[i+1]-x[i]) - (y[i]-y[i-1])/(x[i]-x[i-1]);
         }
         // boundary conditions
-        if(m_left == spline::bd_type::second_deriv) {
+        if(m_left == spline::second_deriv) {
             // 2*c[0] = f''
             A(0,0)=2.0;
             A(0,1)=0.0;
             rhs[0]=m_left_value;
-        } else if(m_left == spline::bd_type::first_deriv) {
+        } else if(m_left == spline::first_deriv) {
             // b[0] = f', needs to be re-expressed in terms of c:
             // (2c[0]+c[1])(x[1]-x[0]) = 3 ((y[1]-y[0])/(x[1]-x[0]) - f')
             A(0,0)=2.0*(x[1]-x[0]);
@@ -282,12 +291,12 @@ void spline::set_points(const std::vector<double>& x,
         } else {
             assert(false);
         }
-        if(m_right == spline::bd_type::second_deriv) {
+        if(m_right == spline::second_deriv) {
             // 2*c[n-1] = f''
             A(n-1,n-1)=2.0;
             A(n-1,n-2)=0.0;
             rhs[n-1]=m_right_value;
-        } else if(m_right == spline::bd_type::first_deriv) {
+        } else if(m_right == spline::first_deriv) {
             // b[n-1] = f', needs to be re-expressed in terms of c:
             // (c[n-2]+2c[n-1])(x[n-1]-x[n-2])
             // = 3 (f' - (y[n-1]-y[n-2])/(x[n-1]-x[n-2]))
@@ -315,10 +324,10 @@ void spline::set_points(const std::vector<double>& x,
         // m_c[n-1] is determined by the boundary condition
         m_d[n-1]=0.0;
         m_b[n-1]=3.0*m_d[n-2]*h*h+2.0*m_c[n-2]*h+m_b[n-2];   // = f'_{n-2}(x_{n-1})
-        if(m_right==bd_type::first_deriv)
+        if(m_right==first_deriv)
             m_c[n-1]=0.0;   // force linear extrapolation
 
-    } else if(type==spline_type::cspline_hermite) {
+    } else if(type==cspline_hermite) {
         // hermite cubic splines which are C^1 (cont. differentiable)
         // and derivatives are specified on each grid point
         // (here we use 3-point finite differences)
@@ -333,18 +342,18 @@ void spline::set_points(const std::vector<double>& x,
                      +  hl/(h*(hl+h))*m_y[i+1];
         }
         // boundary conditions determine b[0] and b[n-1]
-        if(m_left==bd_type::first_deriv) {
+        if(m_left==first_deriv) {
             m_b[0]=m_left_value;
-        } else if(m_left==bd_type::second_deriv) {
+        } else if(m_left==second_deriv) {
             const double h = m_x[1]-m_x[0];
             m_b[0]=0.5*(-m_b[1]-0.5*m_left_value*h+3.0*(m_y[1]-m_y[0])/h);
         } else {
             assert(false);
         }
-        if(m_right==bd_type::first_deriv) {
+        if(m_right==first_deriv) {
             m_b[n-1]=m_right_value;
             m_c[n-1]=0.0;
-        } else if(m_right==bd_type::second_deriv) {
+        } else if(m_right==second_deriv) {
             const double h = m_x[n-1]-m_x[n-2];
             m_b[n-1]=0.5*(-m_b[n-2]+0.5*m_right_value*h+3.0*(m_y[n-1]-m_y[n-2])/h);
             m_c[n-1]=0.5*m_right_value;
@@ -361,7 +370,7 @@ void spline::set_points(const std::vector<double>& x,
     }
 
     // for left extrapolation coefficients
-    m_c0 = (m_left==bd_type::first_deriv) ? 0.0 : m_c[0];
+    m_c0 = (m_left==first_deriv) ? 0.0 : m_c[0];
     m_b0 = m_b[0];
 }
 
@@ -488,6 +497,7 @@ double spline::deriv(int order, double x) const
     return interpol;
 }
 
+#ifdef HAVE_SSTREAM
 std::string spline::info() const
 {
     std::stringstream ss;
@@ -499,6 +509,7 @@ std::string spline::info() const
     }
     return ss.str();
 }
+#endif // HAVE_SSTREAM
 
 
 namespace internal
