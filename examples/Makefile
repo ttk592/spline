@@ -9,6 +9,7 @@ CC=g++
 CFLAGS = ${IALGLIB} -I../src -std=c++11 -Wall -Wextra
 CFLAGS += -O2
 #CFLAGS += -DNDEBUG			# disables all assert() checks
+CFLAGS += -DHAVE_SSTREAM		# whether compiler has <sstream>
 #CFLAGS +=-D_GLIBCXX_USE_CXX11_ABI=0	# for new gcc & boost compiled with old
 LFLAGS=
 
