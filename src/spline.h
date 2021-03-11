@@ -75,7 +75,7 @@ protected:
     // f(x) = a_i + b_i*(x-x_i) + c_i*(x-x_i)^2 + d_i*(x-x_i)^3
     // where a_i = y_i, or else it won't go through grid points
     std::vector<double> m_b,m_c,m_d;        // spline coefficients
-    double  m_b0, m_c0;                     // for left extrapolation
+    double m_c0;                            // for left extrapolation
     spline_type m_type;
     bd_type m_left, m_right;
     double  m_left_value, m_right_value;
@@ -228,7 +228,6 @@ void spline::set_coeffs_from_b()
 
     // for left extrapolation coefficients
     m_c0 = (m_left==first_deriv) ? 0.0 : m_c[0];
-    m_b0 = m_b[0];
 }
 
 void spline::set_points(const std::vector<double>& x,
@@ -371,7 +370,6 @@ void spline::set_points(const std::vector<double>& x,
 
     // for left extrapolation coefficients
     m_c0 = (m_left==first_deriv) ? 0.0 : m_c[0];
-    m_b0 = m_b[0];
 }
 
 bool spline::make_monotonic()
@@ -432,7 +430,7 @@ double spline::operator() (double x) const
     double interpol;
     if(x<m_x[0]) {
         // extrapolation to the left
-        interpol=(m_c0*h + m_b0)*h + m_y[0];
+        interpol=(m_c0*h + m_b[0])*h + m_y[0];
     } else if(x>m_x[n-1]) {
         // extrapolation to the right
         interpol=(m_c[n-1]*h + m_b[n-1])*h + m_y[n-1];
@@ -455,7 +453,7 @@ double spline::deriv(int order, double x) const
         // extrapolation to the left
         switch(order) {
         case 1:
-            interpol=2.0*m_c0*h + m_b0;
+            interpol=2.0*m_c0*h + m_b[0];
             break;
         case 2:
             interpol=2.0*m_c0;
