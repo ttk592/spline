@@ -47,6 +47,8 @@ This is identical to (must be called in that order):
     s.make_monotonic();
 ```
 
+![cubic C2 spline](https://kluge.in-chemnitz.de/opensource/spline/cubic_c2_spline_git.png)
+
 ### Spline types
 Splines are piecewise polynomial functions to interpolate points
 (x<sub>i</sub>, y<sub>i</sub>). In particular, cubic splines can

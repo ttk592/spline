@@ -1,0 +1,518 @@
+\documentclass[11pt]{article}
+
+\usepackage{a4wide}		% standard a4 margins
+\usepackage[pdftex]{graphicx}    % options are: draft, dvips, pdftex
+\usepackage{theorem}		% definition of new theorem environment
+\usepackage[sumlimits,nointlimits]{amsmath}
+\usepackage{amssymb,mathrsfs}	% AMS symbols
+\usepackage{verbatim}		% for comments
+\usepackage{textcomp}           % degree symbol
+
+
+\parindent 0pt					% no indent on new paragraphs
+\setlength{\parskip}{5pt plus 2pt minus 1pt}	% distance btw. 2 paragraphs
+
+
+% my macros
+\newcommand{\R}{\mathbb{R}}
+\providecommand{\set}[1]{\left\{ #1 \right\}}
+\newcommand{\dd}{\:\text{d}}
+\newcommand{\avg}{\textit{avg}}
+\newcommand{\equivalent}{\Leftrightarrow}
+\newcommand{\follows}{\Rightarrow}
+\providecommand{\set}[1]{\left\{ #1 \right\}}
+\newcommand{\Co}{\mathrm{C}}
+\newcommand{\code}{\texttt}
+
+
+
+% -------------------- theorem environments  ----------------------
+\theoremstyle{break}            % main style for all theorems: plain, break
+\theoremheaderfont{\bf}         % font used in the header
+{\theorembodyfont{\sl}          % font used in the body
+  \newtheorem{theorem}{Theorem}[section]
+  \newtheorem{lemma}[theorem]{Lemma}
+  \newtheorem{corollary}[theorem]{Corollary}
+  \newtheorem{proposition}[theorem]{Proposition}
+  \newtheorem{assumption}[theorem]{Assumption}
+  \newtheorem{definition}[theorem]{Definition}
+}
+{\theorembodyfont{\rm}
+  \newtheorem{remark}[theorem]{Remark}
+  \newtheorem{example}[theorem]{Example}
+}
+\newenvironment{proof}{\par\noindent{\bf Proof~}
+  \ignorespaces}{\hspace*{\fill}~$\Box$\par\medskip}
+
+
+\def\parsedate #1:20#2#3#4#5#6#7#8\empty{20#2#3--#4#5--#6#7}
+\def\moddate#1{\expandafter\parsedate\pdffilemoddate{#1}\empty}
+
+\title{Cubic splines}
+\author{Tino Kluge}
+\date{\moddate{\jobname.tex}}
+%\date{\today}
+
+
+
+% -------------------- begin of document -------------------
+\begin{document}
+\maketitle
+
+\section{Interpolating cubic splines}
+\paragraph{Input:} a set of ordered $x, y$ coordinates\footnote{In this
+    document we start with index 1 which differs from C-convention
+    where indices start with 0. E.g.\ in this document $x_1$ equals to
+\code{x[0]} in code, $a_1=$ \code{a[0]}, $c_n=$ \code{c[n-1]}, etc.}
+\begin{equation*}
+\set{(x_1,y_1),\dots,(x_n,y_n)},\quad \text{with } x_1 < x_2 < \dots < x_n.
+\end{equation*}
+\paragraph{Output:} a piecewise cubic function
+\begin{equation}
+\begin{aligned}
+    f(x) & = \begin{cases}
+            f_0(x), & x<x_1,\\
+            f_1(x), & x\in[x_1,x_2),\\
+            \dots  \\
+            f_{n-1}(x), & x\in[x_{n-1},x_n), \\
+            f_{n}(x), & x\geq x_n. \\
+            \end{cases} \\
+            f_0(x)  & = a_1 + b_1 (x-x_1) + c_0 (x-x_1)^2, & x<x_1,\\
+            f_i(x)  & = a_i + b_i (x-x_i) + c_i (x-x_i)^2 + d_i (x-x_i)^3, &
+            x\in[x_i, x_{i+1}),\\
+                f_n(x)  & = a_n + b_n (x-x_n) + c_n (x-x_n)^2, & x\geq x_n,
+\end{aligned}
+\end{equation}
+
+\setlength{\unitlength}{1.0cm}
+\begin{picture}(15,2)(0,-2)
+
+ \put(0,-1.0){\line(1,0){6}}
+ \put(8,-1.0){\line(1,0){5}}
+
+ \put(1,-0.7){\makebox(0,0){$f_0$}}
+ \put(2,-0.9){\line(0,-1){0.2}}
+ \put(2,-1.4){\makebox(0,0){$x_1$}}
+
+ \put(2.5,-0.7){\makebox(0,0){$f_1$}}
+ \put(3,-0.9){\line(0,-1){0.2}}
+ \put(3,-1.4){\makebox(0,0){$x_2$}}
+
+ \put(3,-1.1){\vector(1,0){2}}
+ \put(5,-1.1){\vector(-1,0){2}}
+ \put(4,-1.4){\makebox(0,0){$h_2$}}
+
+ \put(4,-0.7){\makebox(0,0){$f_2$}}
+ \put(5,-0.9){\line(0,-1){0.2}}
+ \put(5,-1.4){\makebox(0,0){$x_3$}}
+
+ \put(9.5,-0.9){\line(0,-1){0.2}}
+ \put(9.5,-1.4){\makebox(0,0){$x_{n-1}$}}
+
+ \put(10.25,-0.7){\makebox(0,0){$f_{n-1}$}}
+ \put(11,-0.9){\line(0,-1){0.2}}
+ \put(11,-1.4){\makebox(0,0){$x_n$}}
+ \put(12,-0.7){\makebox(0,0){$f_n$}}
+
+
+\end{picture}
+
+which satisfies
+\begin{itemize}
+   \item $f(x_i) = y_i$, i.e.\ $f$ interpolates all points (implies $a_i=y_i$),
+   \item $f\in\Co^1$, i.e.\ is continuously differentiable.
+\end{itemize}
+More conditions will be imposed to specify $f$ uniquely but this
+depends on the type of spline as described below.
+Note, the derivatives of $f_i$ are given by
+\begin{equation*}
+\begin{split}
+  f'_i(x)    & = 3 d_i (x-x_i)^2 + 2 c_i (x-x_i) + b_i,\\
+  f''_i(x)   & = 6 d_i (x-x_i)+  2 c_i.\\
+\end{split}
+\end{equation*}
+We also define $h_i:=x_{i+1}-x_i$, $i\in\set{1,\dots, n-1}$.
+
+
+
+\subsection{Cubic $\Co^2$ splines}
+They are defined by
+\begin{itemize}
+   \item $f(x_i) = y_i$, i.e.\ $f$ interpolates all points,
+   \item $f\in\Co^2$, i.e.\ $f$ is twice continuously differentiable.
+\end{itemize}
+In detail this means:
+\begin{equation*}
+\begin{aligned}
+   \text{1) interpolates points: } f_i(x_i) & = y_i: & 
+    a_i & = y_i,\\
+   \text{2) continuous } f\in\Co^0 \text{: } f_i(x_{i+1}) & =y_{i+1}: &
+	d_i h_i^3 + c_i h_i^2 + b_i h_i & = y_{i+1}-y_i,\\
+   \text{3) differentiable }f\in\Co^1 \text{: } f'_{i-1}(x_i) & =
+    f'_i(x_i): &
+    3 d_{i-1} h_{i-1}^2 + 2 c_{i-1} h_{i-1} + b_{i-1} & = b_i,\\
+   \text{4) twice differentiable }f\in\Co^2 \text{: } f''_i(x_{i+1}) & =
+    f''_{i+1}(x_{i+1}): &
+    6 d_i h_i + 2 c_i & = 2 c_{i+1},\\
+\end{aligned}
+\end{equation*}
+Solving for $d_i$ in the 4th condition ($f''$ continuous) gives
+\begin{equation*}
+    f\in\Co^2:\, d_i  =\frac{c_{i+1}-c_i}{3 h_i}.
+\end{equation*}
+Inserting this into the 2nd condition ($f$ continuous) and
+solving for $b_i$ gives
+\begin{equation*}
+    f\in\Co^0:\, b_i  = \frac{y_{i+1}-y_i}{h_i} - \frac{1}{3} (2 c_i + c_{i+1}) h_i.
+\end{equation*}
+Finally, inserting these two equalities into the 3rd condition
+($f'$ continuous) gives a linear equation system for $c$:
+\begin{equation}
+\label{eq:cubic_c2_spline_coeffs}
+\boxed{
+\begin{aligned}
+ \frac{1}{3} h_{i-1} c_{i-1} + \frac{2}{3} (h_{i-1}+h_i) c_i
+ + \frac{1}{3} h_i c_{i+1}   & =
+ \frac{y_{i+1}-y_i}{h_i} -  \frac{y_i-y_{i-1}}{h_{i-1}},
+ & i\in\set{2,\dots,n-1},\\
+ d_i & =\frac{c_{i+1}-c_i}{3 h_i}, & i\in\set{1,\dots,n-1},\\
+  b_i & = \frac{y_{i+1}-y_i}{h_i} - \frac{1}{3} (2 c_i + c_{i+1}) h_i,
+ & i\in\set{1,\dots,n-1}.
+\end{aligned}
+}
+\end{equation}
+
+\subsubsection*{Boundary conditions}
+Second order conditions give immediate equations for $c_1$ and $c_n$:
+\begin{equation*}
+\begin{aligned}
+    f''(x_1)&=\gamma_1: & c_0=c_1 & = \frac{\gamma_1}{2},\\
+    f''(x_n)&=\gamma_n: & c_n & = \frac{\gamma_n}{2}.\\
+\end{aligned}
+\end{equation*}
+First order conditions give immediate relationships for $b_1$ and $b_n$
+which need to be translated to conditions for $c$:
+\begin{equation*}
+\begin{aligned}
+    f'(x_1)&=\delta_1: & b_1&=\delta_1 \follows&
+        \frac{2}{3}h_1 c_1 +\frac{1}{3}h_1 c_2
+        & = \frac{y_2-y_1}{h_1} -\delta_1,\\
+    f'(x_n)&=\delta_n: & b_n&=\delta_n \follows&
+        \frac{1}{3}h_{n-1} c_{n-1} +\frac{2}{3}h_{n-1} c_n
+        & = \delta_n - \frac{y_n-y_{n-1}}{h_{n-1}}.\\
+\end{aligned}
+\end{equation*}
+The equation for the left boundary condition follows directly by inserting
+$b_1=\delta_1$ into the third equation of \eqref{eq:cubic_c2_spline_coeffs}.
+The equation for the right boundary condition follows from the
+differentiability condition $f'_{n-1}(x_n)  = f'_n(x_n)$, replacing
+$b_n$ by $\delta_n$ and replacing $b_{n-1}$ and $d_{n-1}$ by the relations
+in Equation~\eqref{eq:cubic_c2_spline_coeffs}.
+
+In all cases, $d_n$ and $b_n$ are then determined by:
+\begin{equation*}
+\begin{aligned}
+    \text{quadratic extrapolation:} & & d_n & = 0,\\
+    f'_{n-1}(x_n)  = f'_n(x_n): & & b_n & = 3 d_{n-1} h_{n-1}^2 + 2 c_{n-1} h_{n-1} + b_{n-1}.
+\end{aligned}
+\end{equation*}
+
+
+
+\subsection{Hermite $\Co^1$ splines}
+They are defined by
+\begin{itemize}
+   \item $f(x_i) = y_i$, i.e.\ $f$ interpolates all points,
+   \item $f\in\Co^1$, i.e.\ $f$ is continuously differentiable,
+   \item $f'(x_i) = \delta_i$, i.e.\ derivatives are specified at each inner
+       point, e.g.\ by three point finite differences
+       \begin{equation*}
+       \delta_i=-\frac{h_i}{h_{i-1}(h_{i-1} + h_i)} y_{i-1}
+           + \frac{h_i-h_{i-1}}{h_{i-1} h_i} y_i
+           + \frac{h_{i-1}}{h_i(h_{i-1} + h_i)} y_{i+1}.
+       \end{equation*}
+\end{itemize}
+In detail this means:
+\begin{equation*}
+\begin{aligned}
+    \text{1) interpolates points: } f_i(x_i) & = y_i: & 
+    a_i & = y_i,\\
+    \text{2) prescribed derivative: } f'_i(x_i) & = \delta_i: & 
+    b_i & = \delta_i,\\
+    \text{3) continuous } f\in\Co^0 \text{: } f_i(x_{i+1}) & =y_{i+1}: &
+	d_i h_i^3 + c_i h_i^2 + b_i h_i & = y_{i+1}-y_i,\\
+    \text{4) differentiable }f\in\Co^1 \text{: } f'_i(x_{i+1}) & =\delta_{i+1}: &
+    3 d_i h_i^2 + 2 c_i h_i  & = \delta_{i+1}-\delta_i,\\
+\end{aligned}
+\end{equation*}
+which can be solved to obtain
+\begin{equation}
+\label{eq:hermite_spline_coeffs}
+\boxed{
+\begin{aligned}
+  \text{1) } a_i & =  y_i, \\
+  \text{2) } b_i & =  \delta_i, \\
+  \text{3,4) } c_i & = -\frac{2 b_i+b_{i+1}}{h_i}+3\frac{a_{i+1}-a_i}{h_i^2}
+    & = -\frac{2\delta_i+\delta_{i+1}}{h_i} + 3 \frac{y_{i+1}-y_i}{h_i^2},
+        \quad i\in\set{1,\dots,n-1},\\
+  \text{4) } d_i & = -\frac{2 c_i}{3 h_i}+\frac{b_{i+1}-b_i}{3 h_i^2}
+    & = \frac{\delta_i+\delta_{i+1}}{h_i^2}-2\frac{y_{i+1}-y_i}{h_i^3},
+        \quad i\in\set{1,\dots,n-1}.
+\end{aligned}
+}
+\end{equation}
+
+\subsubsection*{Boundary conditions}
+First order conditions are trivial:
+\begin{equation*}
+\begin{aligned}
+    f'(x_1)&=\delta_1: & b_1 & = \delta_1,\, c_0 = 0,\\
+    f'(x_n)&=\delta_n: & b_n & = \delta_n,\, c_n = 0,\\
+\end{aligned}
+\end{equation*}
+Second order conditions imply a value for $c$ but we can re-express
+this in terms of $b$:
+\begin{equation*}
+\begin{aligned}
+    f''(x_1)&=\gamma_1: & c_0 = c_1 &= \frac{1}{2}\gamma_1 \equivalent
+        b_1 = \frac{1}{2}\left(-b_2 -\frac{\gamma}{2} h_1
+            + 3 \frac{y_2-y_1}{h_1}\right),\\
+    f_n''(x_n)&=\gamma_n: & c_n &= \frac{1}{2}\gamma_n,\\
+            f_{n-1}''(x_n)&=\gamma_n: & 6 d_{n-1}h_{n-1} + 2 c_{n-1} &= \frac{1}{2}\gamma_n \equivalent 
+            b_n = \frac{1}{2}\left(-b_{n-1} +\frac{\gamma}{2} h_{n-1}
+            + 3 \frac{y_n-y_{n-1}}{h_{n-1}}\right).\\
+\end{aligned}
+\end{equation*}
+
+
+
+\subsection{Monotonic splines}
+The spline interpolating function $f$ is monotonic increasing
+in a segment $[x_i, x_{i+1}]$, if and only if
+\begin{equation*}
+    f'_i(x) \geq 0, \quad \forall x\in [x_i,x_{i+1}].
+\end{equation*}
+Assuming the spline has already been build
+(without necessarily being monotonic) then $f'$ satisfies
+\begin{equation*}
+\begin{split}
+    f'(x_i) & = b_i,\\
+    f'(x_{i+1}) & = b_{i+1},\\
+    \int_{x_i}^{x_{i+1}} f'(x) \dd x & = y_{i+1}-y_i.
+\end{split}
+\end{equation*}
+Assuming further that if the input is monotonic, i.e.\
+$y_{i-1}\leq y_i \leq y_{i+1} \leq y_{i+2}$, then $b_i$ and $b_{i+1}$
+are both non-negative\footnote{This is automatically satisfied for the Hermite
+splines defined here as $b_i$ are the finite differences. It is not
+necessarily true for the cubic $\Co^2$ spline.}
+then we can apply the results of Section~\ref{sec:non_neg_avg_preserving}:
+one sufficient condition for $f'$ to be non-negative in the whole
+interval $[x_i,x_{i+1}]$ is
+\begin{equation}
+\label{eq:sufficient_for_monotinicity}
+   \sqrt{b_i^2+b_{i+1}^2} \leq 3 \frac{y_{i+1}-y_i}{h_i}.
+\end{equation}
+If that conditions is not satisfied we can reduce the size of $b_i$ and
+$b_{i+1}$ until the condition is satisfied. Reducing the size of $b_i$
+will also not break monotonicity of the previous segment given the
+sufficient condition \eqref{eq:sufficient_for_monotinicity} was 
+satisfied in that segment.
+One method\footnote{For Hermite splines this could be done more
+    efficiently in a single pass.}
+to create monotonic splines therefore is: 
+\begin{enumerate}
+  \item generate the spline without monotonicity requirement,
+  \item if input $y$-data is monotonic increasing
+      but there is a $b_i<0$ then set $b_i=0$,
+  \item if input is increasing, i.e.\
+      $b_i\geq 0$, $b_{i+1}\geq 0$ and $y_i\leq y_{i+1}$,
+      check condition \eqref{eq:sufficient_for_monotinicity}
+      for each segment $i$: if not satisfied,
+      rescale $b_i$ and $b_{i+1}$ so that it is satisfied,
+  \item re-calculate all coefficients $c_i$ and $d_i$ based on the
+      new $b_i$ using Equation~\eqref{eq:hermite_spline_coeffs}.
+\end{enumerate}
+Accordingly, monotonic decreasing splines can be created.
+
+\emph{Warning:} if any adjustment is made then the
+spline will not be $\Co^2$ anymore if it was before. If any of the boundary
+gradients ($b_1$, $b_2$, $b_{n-1}$ or $b_n$) were adjusted then this
+breaks previously defined boundary conditions and extrapolation.
+\clearpage
+\section{Appendix}
+\subsection{Non-negative average preserving interpolation}
+\label{sec:non_neg_avg_preserving}
+Here we are looking at interpolating two points whilst preserving
+a specified average. In particular we want to answer the question
+under which conditions the interpolation stays non-negative. See also
+\cite{Fri:1980:monotone_spline}.
+The interpolation problem can be specified as follows
+and is shown in Figure~\ref{fig:interpolate_avg}:
+\begin{figure}
+  \centering
+  \includegraphics[width=0.66\textwidth]{interpolate_avg}
+  \caption{Interpolating two points $y_1=4$, $y_2=2$
+        whilst maintaining the average $\avg=1$ over the interval
+        $[0,h]$ with $h=1$. As can be seen the interpolation goes
+        briefly negative. One sufficient (but not necessary) criteria for
+        non-negativity is that $\sqrt{y_1^2+y_2^2}\leq 3\, \avg$ which
+        the green points satisfy exactly.}
+  \label{fig:interpolate_avg}
+\end{figure}
+\begin{equation}
+\label{eq:interpolate_avg}
+\begin{split}
+ f(x) & = a + b x + c x^2, \\
+ f(0) & = y_1,\\
+ f(h) & = y_2,\\
+ \frac{1}{h}\int_0^h f(x) \dd x & = \avg,
+\end{split}
+\end{equation}
+which implies
+\begin{equation*}
+\begin{aligned}
+  f(0) & =y_1: &
+    a & = y_1,\\
+  f(h) & = y_2: &
+	a + bh + ch^2 & = y_2,\\
+  \frac{1}{h}\int_0^h f(x) \dd x & = \avg:  &
+        a + \frac{1}{2} bh + \frac{1}{3} ch^2 & = \avg,
+\end{aligned}
+\end{equation*}
+and can be solved to obtain the coefficients
+\begin{equation}
+\label{eq:avg_interp_solve_coeffs}
+\begin{split}
+    a & = y_1,\\
+    b & = \frac{2}{h}\left(-2 y_1 -y_2 + 3\avg\right),\\
+    c & = \frac{3}{h^2}\left(y_1+y_2-2\avg\right).
+\end{split}
+\end{equation}
+
+\begin{proposition}[Non-negativity of the interpolation]
+Assuming $y_1, y_2\geq 0$ and $\avg>0$. The interpolating function $f$
+as defined in Equation~\eqref{eq:interpolate_avg} then satisfies
+\begin{equation*}
+    f(x)\geq 0, \qquad \forall x\in[0,h],
+\end{equation*}
+if and only if
+\begin{equation}
+\label{eq:condition_non_negative}
+    z_1 + z_2 \leq 3 \quad \text{or} \quad
+    z_1^2 + z_2^2 + z_1 z_2 - 6 (z_1+z_2) + 9 \leq 0,
+\end{equation}
+with $z_1:=\frac{y_1}{\avg}$, $z_2:=\frac{y_2}{\avg}$. This is shown
+in red in Figure~\ref{fig:positive_criteria}. A sufficient but not
+necessary condition is
+\begin{equation}
+\label{eq:sufficient_condition_non_negative}
+   \sqrt{z_1^2+z_2^2} \leq 3 ,
+\end{equation}
+which is shown in green in Figure~\ref{fig:positive_criteria}.
+\end{proposition}
+\begin{proof}
+Note, if $c\neq 0$, $f$ has a local extrema $x^*$ at
+\begin{equation*}
+    x^*  =-\frac{b}{2c}, \quad f(x^*)  =a-\frac{b^2}{4c}.
+\end{equation*}
+Note also that the minimum of a function is either assumed on
+its boundaries or at a local minimum and we have assumed that on
+the boundary $f$ is non-negative ($y_1,y_2\geq 0$). Therefore,
+the function $f$ is non-negative in $[0,h]$ if and only if
+at least one of the following three criteria is satisfied:
+\begin{enumerate}
+  \item $f$ has no local minima, i.e. $c\leq 0$, and given
+      $c$ in Equation~\eqref{eq:avg_interp_solve_coeffs} this is equivalent
+      to
+      \begin{equation*}
+          \frac{y_1}{\avg} + \frac{y_2}{\avg} \leq 2.
+      \end{equation*}
+  \item $f$ has a local minima $x^*$ but $x^*\not\in (0,h)$
+      which is equivalent to $b\geq 0$ or $b\leq -2ch$
+      (since $c>0$). With $b$ and $c$ as given in
+      Equation~\eqref{eq:avg_interp_solve_coeffs}
+      this is equivalent to
+      \begin{equation*}
+          \frac{y_1}{\avg} + 2 \frac{y_2}{\avg} \leq 3 \quad \text{or} \quad
+          2 \frac{y_1}{\avg} + \frac{y_2}{\avg} \leq 3.
+      \end{equation*}
+  \item \label{itm:minima_non_negative}
+      $f$ has a local minima but the minima is greater or equal zero,
+      i.e.\ $f(x^*)\geq 0$ which is equivalent to $a-\frac{b^2}{4c}\geq 0$
+      $\equivalent$ $4ac - b^2 \geq 0$, since $c>0$.
+      Given $a$, $b$ and $c$ as in Equation~\eqref{eq:avg_interp_solve_coeffs}
+      this is equivalent (after a little re-arranging) to
+      \begin{equation*}
+        \left(\frac{y_1}{\avg}\right)^2 +
+        \left(\frac{y_2}{\avg}\right)^2 +
+        \frac{y_1 y_2}{\avg^2}- 6 \frac{y_1+y_2}{\avg} + 9 \leq 0.
+      \end{equation*}
+\end{enumerate}
+$\dots$
+\end{proof}
+Note, the inequality under item
+\ref{itm:minima_non_negative} is the inside
+of an ellipse for $z_1:=\frac{y_1}{\avg}$ and $z_2:=\frac{y_2}{\avg}$,
+rotated by 90\textdegree\ and origin shifted to the coordinate $(2,2)$:
+\begin{itemize}
+\item Ellipse
+ \begin{equation*}
+    \frac{z_1^2}{6}+\frac{z_2^2}{2} = 1.
+ \end{equation*}
+\item Rotated\footnote{Rotation matrix
+        $A=\left(\begin{matrix}
+            \cos\varphi & \sin\varphi\\
+            -\sin\varphi &\cos\varphi\\
+        \end{matrix}\right)$
+        and inverse 
+        $A^{-1}=\left(\begin{matrix}
+            \cos\varphi & -\sin\varphi\\
+            \sin\varphi &\cos\varphi\\
+        \end{matrix}\right)
+        = \sqrt{\frac{1}{2}}
+        \left(\begin{matrix}
+            1 & -1 \\
+            1 & 1 \\
+        \end{matrix}\right)$
+        for a 90\textdegree\ rotation. A set defined by an
+        implicit equation
+        $\set{x\in\R^2:g(x)=0}$ rotated is
+        $\set{Ax\in\R^2:g(x)=0}=\set{x\in\R^2:g(A^{-1}x)=0}$.
+    }
+    by 90\textdegree, i.e.
+ \begin{equation*}
+ \begin{split}
+     \frac{\frac{1}{2}(z_1-z_2)^2}{6}+\frac{\frac{1}{2}(z_1+z_2)^2}{2} & = 1,\\
+            & \Updownarrow\\
+     z_1^2 + z_2^2 + z_1 z_2 & = 3.
+ \end{split}
+ \end{equation*}
+\item Origin shifted to $(2,2)$, i.e. 
+ \begin{equation*}
+ \begin{split}
+     (z_1-2)^2 + (z_2-2)^2 + (z_1-2) (z_2-2) & = 3,\\
+             & \Updownarrow\\
+     z_1^2 + z_2^2 + z_1 z_2 - 6(z_1+z_2) + 9 & = 0.
+ \end{split}
+ \end{equation*}
+\end{itemize}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.50\textwidth]{positive_criteria}
+  \caption{Non-negativity of the interpolating function is guaranteed
+        if and only if $(y_1,y_2)$ are inside the red line
+        (in the case of $\avg=1$). A sufficient but not necessary
+        condition is drawn by the dashed green line.}
+  \label{fig:positive_criteria}
+\end{figure}
+
+% ----- bibliography -----
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{literature}
+
+
+
+\end{document}
