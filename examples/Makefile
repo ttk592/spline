@@ -16,7 +16,7 @@ LFLAGS=
 
 PROGS=simple_demo plot plot_avg_preserv plot_parametric plot_bspline
 PROGS_ALGLIB=plot_alglib bench
-PROGS_TESTS=tests/unit_tests tests/compile_units
+PROGS_TESTS=tests/unit_tests tests/compile_units tests/simple_demo_c98
 
 all:		${PROGS}
 more:		${PROGS_ALGLIB}
@@ -37,8 +37,11 @@ plot_bspline:	plot_bspline.o
 
 tests/compile_units:	tests/compile_units.o tests/myfunc1.o tests/myfunc2.o
 		${CC} $? -o $@ 
+tests/simple_demo_c98:	tests/simple_demo_c98.cpp ../src/spline.h
+		${CC} -Wall -Wextra -Werror -I../src -std=c++98 $< -o $@
 tests/unit_tests:	tests/unit_tests.o
 		${CC} $< -o $@ -lboost_unit_test_framework
+
 
 %.o: 		%.cpp ../src/spline.h
 		${CC} ${CFLAGS} -c $< -o $@
