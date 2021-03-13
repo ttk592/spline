@@ -378,7 +378,21 @@ bool spline::make_monotonic()
     assert(m_x.size()==m_b.size());
     assert(m_x.size()>2);
     bool modified = false;
-    int n=(int)m_x.size();
+    const int n=(int)m_x.size();
+    // make sure: input data monotonic increasing --> b_i>=0
+    //            input data monotonic decreasing --> b_i<=0
+    for(int i=0; i<n; i++) {
+        int im1 = std::max(i-1, 0);
+        int ip1 = std::min(i+1, n-1);
+        if( ((m_y[im1]<=m_y[i]) && (m_y[i]<=m_y[ip1]) && m_b[i]<0.0) ||
+            ((m_y[im1]>=m_y[i]) && (m_y[i]>=m_y[ip1]) && m_b[i]>0.0) ) {
+            modified=true;
+            m_b[i]=0.0;
+        }
+    }
+    // if input data is monotonic (b[i], b[i+1], avg have all the same sign)
+    // ensure a sufficient criteria for monotonicity is satisfied:
+    //     sqrt(b[i]^2+b[i+1]^2) <= 3 |avg|, with avg=(y[i+1]-y[i])/h,
     for(int i=0; i<n-1; i++) {
         double h = m_x[i+1]-m_x[i];
         double avg = (m_y[i+1]-m_y[i])/h;
@@ -386,9 +400,10 @@ bool spline::make_monotonic()
             modified=true;
             m_b[i]=0.0;
             m_b[i+1]=0.0;
-        } else if( (m_b[i]>=0.0 && avg>0.0) || (m_b[i]<=0.0 && avg<0.0  ) ) {
+        } else if( (m_b[i]>=0.0 && m_b[i+1]>=0.0 && avg>0.0) ||
+                   (m_b[i]<=0.0 && m_b[i+1]<=0.0 && avg<0.0) ) {
             // input data is monotonic
-            double r = sqrt(m_b[i]*m_b[i]+m_b[i+1]*m_b[i+1])/avg;
+            double r = sqrt(m_b[i]*m_b[i]+m_b[i+1]*m_b[i+1])/std::fabs(avg);
             if(r>3.0) {
                 // sufficient criteria for monotonicity: r<=3
                 // adjust b[i] and b[i+1]

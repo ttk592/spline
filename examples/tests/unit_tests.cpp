@@ -17,7 +17,8 @@
 // which are at least "cont_deriv" times continuously differentiable
 std::vector<tk::spline> setup_splines(const std::vector<double>& X,
                                       const std::vector<double> Y,
-                                      int cont_deriv)
+                                      int cont_deriv,
+                                      bool make_all_monotonic = false)
 {
     assert(X.size()==Y.size());
     std::vector<tk::spline> splines;
@@ -78,11 +79,18 @@ std::vector<tk::spline> setup_splines(const std::vector<double>& X,
     }
 
     // add the same splines but with monotinicity requested
-    if(cont_deriv<=1) {
+    if(cont_deriv<=1 && make_all_monotonic==false) {
         size_t n=splines.size();
         for(size_t i=0; i<n; i++) {
             splines.push_back(splines[i]);
             splines.back().make_monotonic();
+        }
+    }
+    // make all monotonic
+    if(make_all_monotonic==true) {
+        size_t n=splines.size();
+        for(size_t i=0; i<n; i++) {
+            splines[i].make_monotonic();
         }
     }
 
@@ -91,9 +99,13 @@ std::vector<tk::spline> setup_splines(const std::vector<double>& X,
 
 
 std::vector<double> evaluation_grid(const std::vector<double>& X,
-                                    double margin, size_t more_points)
+                                    double margin, size_t more_points,
+                                    bool include_vector=true)
 {
-    std::vector<double> eval_grid=X;
+    std::vector<double> eval_grid;
+    if(include_vector==true) {
+        eval_grid=X;
+    }
     for(size_t i=0; i<more_points; i++) {
         double p = X[0]-margin + (X.back()-X[0]+2.0*margin)*i/more_points;
         eval_grid.push_back(p);
@@ -240,6 +252,46 @@ BOOST_AUTO_TEST_CASE( ThirdDeriv )
         } // BOOST_TEST_CONTEXT
     }
 }
+
+BOOST_AUTO_TEST_CASE( Monotonicity )
+{
+    std::vector<double> X = {-10.2,  0.1, 0.8,  2.4,  3.1,  3.2,  4.7, 19.1};
+    std::vector<double> Y = {   1.0, 1.0, 0.0, -0.1, -0.2, -1.0, -1.1, -1.2};
+    // points to check monotinicity of the spline
+    std::vector<double> eval_grid = evaluation_grid(X,0.0,2000,false);
+
+    // setup all possible types of splines which are at least C^1 and monotonic
+    std::vector<tk::spline> splines=setup_splines(X,Y,1,true);
+
+    for(size_t k=0; k<splines.size(); k++) {
+        const tk::spline& s=splines[k];
+        BOOST_TEST_CONTEXT("spline " << k << ": " << s.info())
+        {
+        int monotonic=0;
+        for(size_t i=1; i<eval_grid.size(); i++) {
+            double x1=eval_grid[i-1];
+            double x2=eval_grid[i];
+            if(monotonic==0) {
+                // determin whether decreasing or increasing
+                if(s(x1)<s(x2)) {
+                    monotonic=1;
+                } else if(s(x1)>s(x2)) {
+                    monotonic=-1;
+                }
+            } else if(monotonic==-1) {
+                // decreasing
+                BOOST_CHECK( s(x1)>=s(x2) );
+            } else if(monotonic==1){
+                // increasing
+                BOOST_CHECK( s(x1)<=s(x2) );
+            } else {
+                assert(false);
+            }
+        }
+        } // BOOST_TEST_CONTEXT
+    }
+}
+
 
 
 BOOST_AUTO_TEST_CASE( BoundaryTypes )
@@ -419,6 +471,6 @@ BOOST_AUTO_TEST_CASE( RegressionTest )
         }
     }
     //printf("sum=%.16e, mod=%.16f\n", sum, sum_mod);
-    BOOST_CHECK_CLOSE(sum, -302474251493.73535, 0.0);
-    BOOST_CHECK_CLOSE(sum_mod, 0.25791635217581654, 0.0);
+    BOOST_CHECK_CLOSE(sum, -298638197797.79303, 0.0);
+    BOOST_CHECK_CLOSE(sum_mod, 0.20285718270622555, 0.0);
 }
