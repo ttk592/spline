@@ -132,6 +132,9 @@ public:
     double operator() (double x) const;
     double deriv(int order, double x) const;
 
+    // solves for all x so that: spline(x) = y
+    std::vector<double> solve(double y, bool ignore_extrapolation=true) const;
+
     // returns the input data points
     std::vector<double> get_x() const { return m_x; }
     std::vector<double> get_y() const { return m_y; }
@@ -183,6 +186,9 @@ public:
                                  bool is_lu_decomposed=false);
 
 };
+
+std::vector<double> solve_cubic(double a, double b, double c, double d,
+                                int newton_iter=0);
 
 } // namespace internal
 
@@ -510,6 +516,47 @@ double spline::deriv(int order, double x) const
     return interpol;
 }
 
+std::vector<double> spline::solve(double y, bool ignore_extrapolation) const
+{
+    std::vector<double> x;          // roots for the entire spline
+    std::vector<double> root;       // roots for each piecewise cubic
+    const size_t n=m_x.size();
+
+    // left extrapolation
+    if(ignore_extrapolation==false) {
+        root = internal::solve_cubic(m_y[0]-y,m_b[0],m_c0,0.0,1);
+        for(size_t j=0; j<root.size(); j++) {
+            if(root[j]<0.0) {
+                x.push_back(m_x[0]+root[j]);
+            }
+        }
+    }
+
+    // brute force check if piecewise cubic has roots in their resp. segment
+    // TODO: make more efficient
+    for(size_t i=0; i<n-1; i++) {
+        root = internal::solve_cubic(m_y[i]-y,m_b[i],m_c[i],m_d[i],2);
+        for(size_t j=0; j<root.size(); j++) {
+            if( (0.0<=root[j]) && (root[j]<m_x[i+1]-m_x[i]) ) {
+                x.push_back(m_x[i]+root[j]);
+            }
+        }
+    }
+
+    // right extrapolation
+    if(ignore_extrapolation==false) {
+        root = internal::solve_cubic(m_y[n-1]-y,m_b[n-1],m_c[n-1],0.0,1);
+        for(size_t j=0; j<root.size(); j++) {
+            if(0.0<=root[j]) {
+                x.push_back(m_x[n-1]+root[j]);
+            }
+        }
+    }
+
+    return x;
+};
+
+
 #ifdef HAVE_SSTREAM
 std::string spline::info() const
 {
@@ -669,6 +716,166 @@ std::vector<double> band_matrix::lu_solve(const std::vector<double>& b,
     x=this->r_solve(y);
     return x;
 }
+
+// machine precision of a double, i.e. the successor of 1 is 1+eps
+double get_eps()
+{
+    //return std::numeric_limits<double>::epsilon();    // __DBL_EPSILON__
+    return 2.2204460492503131e-16;                      // 2^-52
+}
+
+// solutions for a + b*x = 0
+std::vector<double> solve_linear(double a, double b)
+{
+    std::vector<double> x;      // roots
+    if(b==0.0) {
+        if(a==0.0) {
+            // 0*x = 0
+            x.resize(1);
+            x[0] = 0.0;   // any x solves it but we need to pick one
+            return x;
+        } else {
+            // 0*x + ... = 0, no solution
+            return x;
+        }
+    } else {
+        x.resize(1);
+        x[0] = -a/b;
+        return x;
+    }
+}
+
+// solutions for a + b*x + c*x^2 = 0
+std::vector<double> solve_quadratic(double a, double b, double c,
+                                    int newton_iter=0)
+{
+    if(c==0.0) {
+        return solve_linear(a,b);
+    }
+    // rescale so that we solve x^2 + 2p x + q = (x+p)^2 + q - p^2 = 0
+    double p=0.5*b/c;
+    double q=a/c;
+    double discr = p*p-q;
+    const double eps=0.5*internal::get_eps();
+    double discr_err = (6.0*(p*p)+3.0*fabs(q)+fabs(discr))*eps;
+
+    std::vector<double> x;      // roots
+    if(fabs(discr)<=discr_err) {
+        // discriminant is zero --> one root
+        x.resize(1);
+        x[0] = -p;
+    } else if(discr<0) {
+        // no root
+    } else {
+        // two roots
+        x.resize(2);
+        x[0] = -p - sqrt(discr);
+        x[1] = -p + sqrt(discr);
+    }
+
+    // improve solution via newton steps
+    for(size_t i=0; i<x.size(); i++) {
+        for(int k=0; k<newton_iter; k++) {
+            double f  = (c*x[i] + b)*x[i] + a;
+            double f1 = 2.0*c*x[i] + b;
+            // only adjust if slope is large enough
+            if(fabs(f1)>1e-8) {
+                x[i] -= f/f1;
+            }
+        }
+    }
+
+    return x;
+}
+
+// solutions for the cubic equation: a + b*x +c*x^2 + d*x^3 = 0
+// this is a naive implementation of the analytic solution without
+// optimisation for speed or numerical accuracy
+// newton_iter: number of newton iterations to improve analytical solution
+// see also
+//   gsl: gsl_poly_solve_cubic() in solve_cubic.c
+//   octave: roots.m - via eigenvalues of the Frobenius companion matrix
+std::vector<double> solve_cubic(double a, double b, double c, double d,
+                                int newton_iter)
+{
+    if(d==0.0) {
+        return solve_quadratic(a,b,c,newton_iter);
+    }
+
+    // convert to normalised form: a + bx + cx^2 + x^3 = 0
+    if(d!=1.0) {
+        a/=d;
+        b/=d;
+        c/=d;
+    }
+
+    // convert to depressed cubic: z^3 - 3pz - 2q = 0
+    // via substitution: z = x + c/3
+    std::vector<double> z;              // roots of the depressed cubic
+    double p = -(1.0/3.0)*b + (1.0/9.0)*(c*c);
+    double r = 2.0*(c*c)-9.0*b;
+    double q = -0.5*a - (1.0/54.0)*(c*r);
+    double discr=p*p*p-q*q;             // discriminant
+    // calculating numerical round-off errors with assumptions:
+    //  - each operation is precise but each intermediate result x
+    //    when stored has max error of x*eps
+    //  - only multiplication with a power of 2 introduces no new error
+    //  - a,b,c,d and some fractions (e.g. 1/3) have rounding errors eps
+    //  - p_err << |p|, q_err << |q|, ... (this is violated in rare cases)
+    // would be more elegant to use boost::numeric::interval<double>
+    const double eps = internal::get_eps();
+    double p_err = eps*((3.0/3.0)*fabs(b)+(4.0/9.0)*(c*c)+fabs(p));
+    double r_err = eps*(6.0*(c*c)+18.0*fabs(b)+fabs(r));
+    double q_err = 0.5*fabs(a)*eps + (1.0/54.0)*fabs(c)*(r_err+fabs(r)*3.0*eps)
+                   + fabs(q)*eps;
+    double discr_err = (p*p) * (3.0*p_err + fabs(p)*2.0*eps)
+                       + fabs(q) * (2.0*q_err + fabs(q)*eps) + fabs(discr)*eps;
+
+    // depending on the discriminant we get different solutions
+    if(fabs(discr)<=discr_err) {
+        // discriminant zero: one or two real roots
+        if(fabs(p)<=p_err) {
+            // p and q are zero: single root
+            z.resize(1);
+            z[0] = 0.0;             // triple root
+        } else {
+            z.resize(2);
+            z[0] = 2.0*q/p;         // single root
+            z[1] = -0.5*z[0];       // double root
+        }
+    } else if(discr>0) {
+        // three real roots: via trigonometric solution
+        z.resize(3);
+        double ac = (1.0/3.0) * acos( q/(p*sqrt(p)) );
+        double sq = 2.0*sqrt(p);
+        z[0] = sq * cos(ac);
+        z[1] = sq * cos(ac-2.0*M_PI/3.0);
+        z[2] = sq * cos(ac-4.0*M_PI/3.0);
+    } else if (discr<0.0) {
+        // single real root: via Cardano's fromula
+        z.resize(1);
+        double sgnq = (q >= 0 ? 1 : -1);
+        double basis = fabs(q) + sqrt(-discr);
+        double C = sgnq * pow(basis, 1.0/3.0); // c++11 has std::cbrt()
+        z[0] = C + p/C;
+    }
+    for(size_t i=0; i<z.size(); i++) {
+        // convert depressed cubic roots to original cubic: x = z - c/3
+        z[i] -= (1.0/3.0)*c;
+        // improve solution via newton steps
+        for(int k=0; k<newton_iter; k++) {
+            double f  = ((z[i] + c)*z[i] + b)*z[i] + a;
+            double f1 = (3.0*z[i] + 2.0*c)*z[i] + b;
+            // only adjust if slope is large enough
+            if(fabs(f1)>1e-8) {
+                z[i] -= f/f1;
+            }
+        }
+    }
+    std::sort(z.begin(), z.end());
+    return z;
+}
+
 
 } // namespace internal
 

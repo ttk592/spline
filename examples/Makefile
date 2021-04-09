@@ -14,7 +14,7 @@ CFLAGS += -DHAVE_SSTREAM		# whether compiler has <sstream>
 LFLAGS=
 
 
-PROGS=simple_demo plot plot_avg_preserv plot_parametric plot_bspline
+PROGS=simple_demo plot plot_avg_preserv plot_parametric plot_bspline cubic_root
 PROGS_ALGLIB=plot_alglib bench
 PROGS_TESTS=tests/unit_tests tests/compile_units tests/simple_demo_c98
 
@@ -34,6 +34,8 @@ plot_parametric:	plot_parametric.o
 		${CC} $< -o $@
 plot_bspline:	plot_bspline.o
 		${CC} $< -o $@
+cubic_root:	cubic_root.o gsl_solve_cubic.o
+		${CC} $^ -o $@
 
 tests/compile_units:	tests/compile_units.o tests/myfunc1.o tests/myfunc2.o
 		${CC} $? -o $@ 

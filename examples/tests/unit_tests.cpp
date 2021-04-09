@@ -4,7 +4,9 @@
 #include <cstdlib>
 #include <cassert>
 #include <cmath>
+#include <complex>
 #include <vector>
+#include <algorithm>
 #include <string>
 
 
@@ -473,4 +475,186 @@ BOOST_AUTO_TEST_CASE( RegressionTest )
     //printf("sum=%.16e, mod=%.16f\n", sum, sum_mod);
     BOOST_CHECK_CLOSE(sum, -298638197797.79303, 0.0);
     BOOST_CHECK_CLOSE(sum_mod, 0.20285718270622555, 0.0);
+}
+
+
+// double exponential distribution
+double rand_laplace(double lambda=1.0, double mu=0)
+{
+    double u = rand_unif();
+    if(u<=0.5) {
+        return mu-log(2.0*u)/lambda;
+    } else {
+        return mu+log(2.0*(u-0.5))/lambda;
+    }
+}
+
+// cubic function value and its first derivative
+double f(double a, double b, double c, double d, double x)
+{
+    return (((d*x) + c)*x + b)*x + a;
+}
+double f1(double b, double c, double d, double x)
+{
+    return ((3.0*d*x) + 2.0*c)*x + b;
+}
+
+// roots of cubic functions: test internal::solve_cubic()
+BOOST_AUTO_TEST_CASE( CubicRootFinding )
+{
+    const double max_err  = 1e-7;   // (numerical root - exact root)
+    const double max_func = 1e-12;  // f(numerical root) <= max_func+noise
+    const double dx       = 1e-15;  //    where noise = |f(x)-f(x*(1+dx))|
+
+    // (1) building cases where we know the solution
+    std::vector< std::array<std::complex<double>, 3> > roots;
+    size_t num_per_case=1000;
+    // (1a) three real roots
+    roots.push_back( {-1.0, 0.0, 1.0} );
+    roots.push_back( {-1.0, 0.0, 1e-6} );
+    roots.push_back( {-10.0, 1.0, 1.0001} );
+    roots.push_back( {1.0, 1.001, 1.002} );
+    roots.push_back( {1.0, 1.00001, 1.02} );
+
+    for(size_t i=0; i<num_per_case; i++) {
+        std::array<std::complex<double>, 3> z;
+        for(size_t j=0; j<z.size(); j++) {
+            z[j] = rand_laplace();
+        }
+        roots.push_back(z);
+    }
+    // (1b) one double, one single real root
+    roots.push_back( {-1.0, -1.0, 1.0} );
+    roots.push_back( {-1.0, 1.0, 1.0} );
+    roots.push_back( {-10.0, 1.0, 1.0} );
+    roots.push_back( {1.0, 1.001, 1.001} );
+    for(size_t i=0; i<num_per_case; i++) {
+        std::array<std::complex<double>, 3> z;
+        z[0] = rand_laplace();
+        z[1] = rand_laplace();
+        z[2] = z[1];
+        roots.push_back(z);
+    }
+    // (1c) one triple real root
+    roots.push_back( {-1.0, -1.0, -1.0} );
+    roots.push_back( {0.0, 0.0, 0.0} );
+    roots.push_back( {1.0, 1.0, 1.0} );
+    roots.push_back( {10.0001, 10.0001, 10.0001} );
+    for(size_t i=0; i<num_per_case; i++) {
+        std::array<std::complex<double>, 3> z;
+        z[0] = rand_laplace();
+        z[1] = z[0];
+        z[2] = z[0];
+        roots.push_back(z);
+    }
+    // (1d) one real and two conjugate complex root
+    roots.push_back( { -1.0, {-1.0, 2.4}, {-1.0, -2.4} } );
+    roots.push_back( { -1.0, {-10.0, 0.01}, {-10.0, -0.01} } );
+    roots.push_back( { 0.0, {0.0, 0.01}, {0.0, -0.01} } );
+    roots.push_back( { 0.01, {10.0, 0.0001}, {10.0, -0.0001} } );
+    for(size_t i=0; i<num_per_case; i++) {
+        std::array<std::complex<double>, 3> z;
+        z[0] = std::complex<double>(rand_laplace(),rand_laplace());
+        z[1] = std::conj(z[0]);
+        z[2] = rand_laplace();
+        roots.push_back(z);
+    }
+
+    const size_t num_coeffs = 2*roots.size();
+    for(size_t i=0; i<num_coeffs; i++) {
+        // (x-x0)*(x-x1)*(x-x2) = -x0*x1*x2 + (x0*x1+x0*x2+x1*x2)*x 
+        //                        -(x0+x1+x2)*x^2 + x^3
+        std::array<double,4> c;         // coefficients c0+c1*x+c2*x^2+c3*x^3
+        std::vector<double> x;          // exact real roots
+        if(i<roots.size()) {
+            // calculate coefficients from exact roots
+            std::array<std::complex<double>,3>& z = roots[i];
+            double alpha = 1.0; //rand_laplace();
+            c[0] = -alpha*std::real(z[0]*z[1]*z[2]);                // a
+            c[1] = alpha*std::real(z[0]*z[1]+z[0]*z[2]+z[1]*z[2]);  // b
+            c[2] = -alpha*std::real(z[0]+z[1]+z[2]);                // c
+            c[3] = alpha;                                           // d
+            // we want to know real roots only
+            for(size_t j=0; j<z.size(); j++) {
+                if(std::imag(z[j])==0.0) {
+                    x.push_back(std::real(z[j]));
+                }
+            }
+            std::sort(x.begin(), x.end());
+            x.erase(std::unique(x.begin(), x.end()), x.end());    // remove dupl
+        } else {
+            // generate coefficients randomly
+            c[0] = (rand_unif()<0.1)  ? 0.0 : rand_laplace();   // a
+            c[1] = (rand_unif()<0.1)  ? 0.0 : rand_laplace();   // b
+            c[2] = (rand_unif()<0.1)  ? 0.0 : rand_laplace();   // c
+            c[3] = (rand_unif()<0.25) ? 0.0 : rand_laplace();   // d
+        }
+
+        // numerical solution
+        std::vector<double> sol=tk::internal::solve_cubic(c[0],c[1],c[2],c[3],2);
+
+        // info string in case test fails
+        std::stringstream ss;
+        ss.precision(17);
+        ss << c[0] << " + " << c[1] << " x + " << c[2] << " x^2 + " << c[3] << " x^3" << std::endl;
+        ss << "exact roots:   ";
+        for(size_t j=0; j<x.size(); j++) {
+            ss << x[j] << " ";
+        }
+        ss << std::endl;
+        ss << "numeric roots: ";
+        for(size_t j=0; j<sol.size(); j++) {
+            ss << sol[j] << " ";
+        }
+        ss << std::endl;
+
+        BOOST_TEST_CONTEXT(ss.str()) {
+            // check f(sol) = 0
+            for(size_t j=0; j<sol.size(); j++) {
+                double y = f(c[0],c[1],c[2],c[3],sol[j]);
+                double y1 = fabs(f(c[0],c[1],c[2],c[3],sol[j]*(1.0-dx)));
+                double y2 = fabs(f(c[0],c[1],c[2],c[3],sol[j]*(1.0+dx)));
+                double noise = std::max(fabs(y-y1), fabs(y-y2));
+                BOOST_CHECK_SMALL(y, max_func+noise);
+            }
+            // if exact roots are known check against them
+            if(i<roots.size()) {
+                BOOST_CHECK(sol.size()==x.size());
+                for(size_t j=0; j<std::min(sol.size(),x.size()); j++) {
+                    BOOST_CHECK_SMALL(sol[j]-x[j], max_err);
+                }
+            }
+        }
+    }
+}
+
+
+
+// spline solving functionality: spline(x) = y
+BOOST_AUTO_TEST_CASE( SplineSolve )
+{
+    const double max_func = 1e-12;  // f(numerical root) <= max_func+noise
+    const double dx       = 1e-15;  //    where noise = |f(x)-f(x*(1+dx))|
+
+    std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
+    std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
+
+    // setup all possible types of splines which are at least C^0
+    std::vector<tk::spline> splines=setup_splines(X,Y,0);
+
+    const double y=0.1;
+    for(size_t k=0; k<splines.size(); k++) {
+        const tk::spline& s=splines[k];
+        BOOST_TEST_CONTEXT("spline " << k << ": " << s.info()) {
+            std::vector<double> root = s.solve(y);
+            BOOST_CHECK(root.size()>=5);
+            for(size_t i=0; i<root.size(); i++) {
+                double y0 = s(root[i]);
+                double y1 = s(root[i]*(1.0-dx));
+                double y2 = s(root[i]*(1.0+dx));
+                double noise = std::max(fabs(y0-y1), fabs(y0-y2));
+                BOOST_CHECK_SMALL(y0-y, max_func+noise);
+            }
+        }
+    }
 }

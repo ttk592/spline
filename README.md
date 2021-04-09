@@ -1,5 +1,7 @@
 ## C++ cubic spline interpolation
 
+![cubic C2 spline](https://kluge.in-chemnitz.de/opensource/spline/cubic_c2_spline_git.png)
+
 This is a lightweight implementation of **cubic splines**
 to interpolate points f(x<sub>i</sub>) = y<sub>i</sub> with
 the following features.
@@ -27,6 +29,7 @@ be used like this:
     tk::spline s(X,Y);			// X needs to be strictly increasing
     double value=s(1.3);		// interpolated value at 1.3
     double deriv=s.deriv(1,1.3);	// 1st order derivative at 1.3
+    std::vector<double> solutions = s.solve(0.0);	// solves s(x)=0.0
     ...
 ```
 
@@ -47,7 +50,6 @@ This is identical to (must be called in that order):
     s.make_monotonic();
 ```
 
-![cubic C2 spline](https://kluge.in-chemnitz.de/opensource/spline/cubic_c2_spline_git.png)
 
 ### Spline types
 Splines are piecewise polynomial functions to interpolate points
