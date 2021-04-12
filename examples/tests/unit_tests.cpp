@@ -576,11 +576,11 @@ BOOST_AUTO_TEST_CASE( CubicRootFinding )
     std::vector< std::array<std::complex<double>, 3> > roots;
     size_t num_per_case=1000;
     // (1a) three real roots
-    roots.push_back( {-1.0, 0.0, 1.0} );
-    roots.push_back( {-1.0, 0.0, 1e-6} );
-    roots.push_back( {-10.0, 1.0, 1.0001} );
-    roots.push_back( {1.0, 1.001, 1.002} );
-    roots.push_back( {1.0, 1.00001, 1.02} );
+    roots.push_back( {{-1.0, 0.0, 1.0}} );
+    roots.push_back( {{-1.0, 0.0, 1e-6}} );
+    roots.push_back( {{-10.0, 1.0, 1.0001}} );
+    roots.push_back( {{1.0, 1.001, 1.002}} );
+    roots.push_back( {{1.0, 1.00001, 1.02}} );
 
     for(size_t i=0; i<num_per_case; i++) {
         std::array<std::complex<double>, 3> z;
@@ -590,10 +590,10 @@ BOOST_AUTO_TEST_CASE( CubicRootFinding )
         roots.push_back(z);
     }
     // (1b) one double, one single real root
-    roots.push_back( {-1.0, -1.0, 1.0} );
-    roots.push_back( {-1.0, 1.0, 1.0} );
-    roots.push_back( {-10.0, 1.0, 1.0} );
-    roots.push_back( {1.0, 1.001, 1.001} );
+    roots.push_back( {{-1.0, -1.0, 1.0}} );
+    roots.push_back( {{-1.0, 1.0, 1.0}} );
+    roots.push_back( {{-10.0, 1.0, 1.0}} );
+    roots.push_back( {{1.0, 1.001, 1.001}} );
     for(size_t i=0; i<num_per_case; i++) {
         std::array<std::complex<double>, 3> z;
         z[0] = rand_laplace();
@@ -602,10 +602,10 @@ BOOST_AUTO_TEST_CASE( CubicRootFinding )
         roots.push_back(z);
     }
     // (1c) one triple real root
-    roots.push_back( {-1.0, -1.0, -1.0} );
-    roots.push_back( {0.0, 0.0, 0.0} );
-    roots.push_back( {1.0, 1.0, 1.0} );
-    roots.push_back( {10.0001, 10.0001, 10.0001} );
+    roots.push_back( {{-1.0, -1.0, -1.0}} );
+    roots.push_back( {{0.0, 0.0, 0.0}} );
+    roots.push_back( {{1.0, 1.0, 1.0}} );
+    roots.push_back( {{10.0001, 10.0001, 10.0001}} );
     for(size_t i=0; i<num_per_case; i++) {
         std::array<std::complex<double>, 3> z;
         z[0] = rand_laplace();
@@ -614,10 +614,10 @@ BOOST_AUTO_TEST_CASE( CubicRootFinding )
         roots.push_back(z);
     }
     // (1d) one real and two conjugate complex root
-    roots.push_back( { -1.0, {-1.0, 2.4}, {-1.0, -2.4} } );
-    roots.push_back( { -1.0, {-10.0, 0.01}, {-10.0, -0.01} } );
-    roots.push_back( { 0.0, {0.0, 0.01}, {0.0, -0.01} } );
-    roots.push_back( { 0.01, {10.0, 0.0001}, {10.0, -0.0001} } );
+    roots.push_back( {{ -1.0, {-1.0, 2.4}, {-1.0, -2.4} }} );
+    roots.push_back( {{ -1.0, {-10.0, 0.01}, {-10.0, -0.01} }} );
+    roots.push_back( {{ 0.0, {0.0, 0.01}, {0.0, -0.01} }} );
+    roots.push_back( {{ 0.01, {10.0, 0.0001}, {10.0, -0.0001} }} );
     for(size_t i=0; i<num_per_case; i++) {
         std::array<std::complex<double>, 3> z;
         z[0] = std::complex<double>(rand_laplace(),rand_laplace());
