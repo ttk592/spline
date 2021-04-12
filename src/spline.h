@@ -66,7 +66,8 @@ public:
     // boundary condition type for the spline end-points
     enum bd_type {
         first_deriv = 1,
-        second_deriv = 2
+        second_deriv = 2,
+        not_a_knot = 3
     };
 
 protected:
@@ -241,7 +242,10 @@ void spline::set_points(const std::vector<double>& x,
                         spline_type type)
 {
     assert(x.size()==y.size());
-    assert(x.size()>2);
+    assert(x.size()>=3);
+    // not-a-knot with 3 points has many solutions
+    if(m_left==not_a_knot || m_right==not_a_knot)
+        assert(x.size()>=4);
     m_type=type;
     m_made_monotonic=false;
     m_x=x;
@@ -273,7 +277,9 @@ void spline::set_points(const std::vector<double>& x,
 
         // setting up the matrix and right hand side of the equation system
         // for the parameters b[]
-        internal::band_matrix A(n,1,1);
+        int n_upper = (m_left  == spline::not_a_knot) ? 2 : 1;
+        int n_lower = (m_right == spline::not_a_knot) ? 2 : 1;
+        internal::band_matrix A(n,n_upper,n_lower);
         std::vector<double>  rhs(n);
         for(int i=1; i<n-1; i++) {
             A(i,i-1)=1.0/3.0*(x[i]-x[i-1]);
@@ -293,6 +299,13 @@ void spline::set_points(const std::vector<double>& x,
             A(0,0)=2.0*(x[1]-x[0]);
             A(0,1)=1.0*(x[1]-x[0]);
             rhs[0]=3.0*((y[1]-y[0])/(x[1]-x[0])-m_left_value);
+        } else if(m_left == spline::not_a_knot) {
+            // f'''(x[1]) exists, i.e. d[0]=d[1], or re-expressed in c:
+            // -h1*c[0] + (h0+h1)*c[1] - h0*c[2] = 0
+            A(0,0) = -(x[2]-x[1]);
+            A(0,1) = x[2]-x[0];
+            A(0,2) = -(x[1]-x[0]);
+            rhs[0] = 0.0;
         } else {
             assert(false);
         }
@@ -308,6 +321,13 @@ void spline::set_points(const std::vector<double>& x,
             A(n-1,n-1)=2.0*(x[n-1]-x[n-2]);
             A(n-1,n-2)=1.0*(x[n-1]-x[n-2]);
             rhs[n-1]=3.0*(m_right_value-(y[n-1]-y[n-2])/(x[n-1]-x[n-2]));
+        } else if(m_right == spline::not_a_knot) {
+            // f'''(x[n-2]) exists, i.e. d[n-3]=d[n-2], or re-expressed in c:
+            // -h_{n-2}*c[n-3] + (h_{n-3}+h_{n-2})*c[n-2] - h_{n-3}*c[n-1] = 0
+            A(n-1,n-3) = -(x[n-1]-x[n-2]);
+            A(n-1,n-2) = x[n-1]-x[n-3];
+            A(n-1,n-1) = -(x[n-2]-x[n-3]);
+            rhs[0] = 0.0;
         } else {
             assert(false);
         }
@@ -352,6 +372,12 @@ void spline::set_points(const std::vector<double>& x,
         } else if(m_left==second_deriv) {
             const double h = m_x[1]-m_x[0];
             m_b[0]=0.5*(-m_b[1]-0.5*m_left_value*h+3.0*(m_y[1]-m_y[0])/h);
+        } else if(m_left == not_a_knot) {
+            // f''' continuous at x[1]
+            const double h0 = m_x[1]-m_x[0];
+            const double h1 = m_x[2]-m_x[1];
+            m_b[0]= -m_b[1] + 2.0*(m_y[1]-m_y[0])/h0
+                    + h0*h0/(h1*h1)*(m_b[1]+m_b[2]-2.0*(m_y[2]-m_y[1])/h1);
         } else {
             assert(false);
         }
@@ -362,6 +388,14 @@ void spline::set_points(const std::vector<double>& x,
             const double h = m_x[n-1]-m_x[n-2];
             m_b[n-1]=0.5*(-m_b[n-2]+0.5*m_right_value*h+3.0*(m_y[n-1]-m_y[n-2])/h);
             m_c[n-1]=0.5*m_right_value;
+        } else if(m_right == not_a_knot) {
+            // f''' continuous at x[n-2]
+            const double h0 = m_x[n-2]-m_x[n-3];
+            const double h1 = m_x[n-1]-m_x[n-2];
+            m_b[n-1]= -m_b[n-2] + 2.0*(m_y[n-1]-m_y[n-2])/h1 + h1*h1/(h0*h0)
+                      *(m_b[n-3]+m_b[n-2]-2.0*(m_y[n-2]-m_y[n-3])/h0);
+            // f'' continuous at x[n-1]: c[n-1] = 3*d[n-2]*h[n-2] + c[n-1]
+            m_c[n-1]=(m_b[n-2]+2.0*m_b[n-1])/h1-3.0*(m_y[n-1]-m_y[n-2])/(h1*h1);
         } else {
             assert(false);
         }

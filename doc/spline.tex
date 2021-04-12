@@ -209,6 +209,19 @@ differentiability condition $f'_{n-1}(x_n)  = f'_n(x_n)$, replacing
 $b_n$ by $\delta_n$ and replacing $b_{n-1}$ and $d_{n-1}$ by the relations
 in Equation~\eqref{eq:cubic_c2_spline_coeffs}.
 
+The not-a-knot condition, i.e.\ the continuity of the third derivatives
+at the two outer segments, gives $d_1=d_2$ and $d_{n-2}=d_{n-1}$:
+\begin{equation*}
+\begin{aligned}
+    f_1'''(x_2)&=f_2'''(x_2): & d_1&=d_2 \follows&
+    -h_2 c_1 + (h_1+h_2) c_2 - h_1 c_3 & = 0,\\
+    f_{n-2}'''(x_{n-1})&=f_{n-1}'''(x_{n-1}): & d_{n-2}&=d_{n-1}\follows&
+    -h_{n-1} c_{n-2} + (h_{n-2}+h_{n-1}) c_{n-1} - h_{n-2} c_n & = 0.
+\end{aligned}
+\end{equation*}
+
+
+
 In all cases, $d_n$ and $b_n$ are then determined by:
 \begin{equation*}
 \begin{aligned}
@@ -267,9 +280,10 @@ First order conditions are trivial:
 \begin{equation*}
 \begin{aligned}
     f'(x_1)&=\delta_1: & b_1 & = \delta_1,\, c_0 = 0,\\
-    f'(x_n)&=\delta_n: & b_n & = \delta_n,\, c_n = 0,\\
+    f'(x_n)&=\delta_n: & b_n & = \delta_n,\, c_n = 0.
 \end{aligned}
 \end{equation*}
+
 Second order conditions imply a value for $c$ but we can re-express
 this in terms of $b$:
 \begin{equation*}
@@ -278,13 +292,31 @@ this in terms of $b$:
         b_1 = \frac{1}{2}\left(-b_2 -\frac{\gamma}{2} h_1
             + 3 \frac{y_2-y_1}{h_1}\right),\\
     f_n''(x_n)&=\gamma_n: & c_n &= \frac{1}{2}\gamma_n,\\
-            f_{n-1}''(x_n)&=\gamma_n: & 6 d_{n-1}h_{n-1} + 2 c_{n-1} &= \frac{1}{2}\gamma_n \equivalent 
+            f_{n-1}''(x_n)&=\gamma_n: & 6 d_{n-1}h_{n-1} + 2 c_{n-1} &= \frac{1}{2}\gamma_n \equivalent
             b_n = \frac{1}{2}\left(-b_{n-1} +\frac{\gamma}{2} h_{n-1}
             + 3 \frac{y_n-y_{n-1}}{h_{n-1}}\right).\\
 \end{aligned}
 \end{equation*}
 
-
+The not-a-knot contition gives $d_1=d_2$ and $d_{n-2}=d_{n-1}$ and
+re-expressing in terms of $b$ yields:
+\begin{equation*}
+\begin{aligned}
+    f_1'''(x_2)&=f_2'''(x_2): & d_1&=d_2 \equivalent &
+    b_1 & = -b_2+2\frac{y_2-y_1}{h_1}+\frac{h_1^2}{h_2^2}
+        \left(b_2+b_3-2\frac{y_3-y_2}{h_2}\right),\\
+    f_{n-2}'''(x_{n-1})&=f_{n-1}'''(x_{n-1}): & d_{n-2}&=d_{n-1}\equivalent&
+    b_n & = -b_{n-1}+2\frac{y_n-y_{n-1}}{h_{n-1}}\\
+        & & & & & +\frac{h_{n-1}^2}{h_{n-2}^2}
+        \left(b_{n-2}+b_{n-1}-2\frac{y_{n-1}-y_{n-2}}{h_{n-2}}\right).
+\end{aligned}
+\end{equation*}
+To determine a value for $c_n$ we additionally impose second order
+continuity at the boundary:
+\begin{equation*}
+    f_{n-1}''(x_n)=f_n''(x_n): \, c_n =3d_{n-1}h_{n-1}+c_{n-1} \equivalent\,
+        c_n=\frac{b_{n-1}+2 b_n}{h_{n-1}}-3\frac{y_n-y_{n-1}}{h_{n-1}^2}.
+\end{equation*}
 
 \subsection{Monotonic splines}
 The spline interpolating function $f$ is monotonic increasing

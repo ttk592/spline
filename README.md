@@ -9,7 +9,7 @@ the following features.
 * available spline types:
   * **cubic C<sup>2</sup> splines**: global, twice continuously differentiable 
   * **cubic Hermite splines**: local, continuously differentiable (C<sup>1</sup>)
-* boundary conditions: **first** and **second order** derivatives can be specified, periodic condition is not implemented
+* boundary conditions: **first** and **second order** derivatives can be specified, **not-a-knot** condition, periodic condition is not implemented
 * extrapolation
   * linear: if first order derivatives are specified or 2nd order = 0
   * quadratic: if 2nd order derivatives not equal to zero specified

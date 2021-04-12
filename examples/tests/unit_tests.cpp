@@ -14,6 +14,39 @@
 #define BOOST_TEST_MODULE SplineUnitTests
 #include <boost/test/unit_test.hpp>
 
+// cubic function value and its first derivative
+double f(double a, double b, double c, double d, double x)
+{
+    return (((d*x) + c)*x + b)*x + a;
+}
+double f1(double b, double c, double d, double x)
+{
+    return ((3.0*d*x) + 2.0*c)*x + b;
+}
+
+// uniform [0,1] distribution
+double rand_unif()
+{
+    return (double)std::rand()/RAND_MAX;
+}
+// exponential distribution
+double rand_exp(double lambda=1.0)
+{
+    double u = rand_unif();
+    return -log(u)/lambda;
+}
+// double exponential distribution
+double rand_laplace(double lambda=1.0, double mu=0)
+{
+    double u = rand_unif();
+    if(u<=0.5) {
+        return mu-log(2.0*u)/lambda;
+    } else {
+        return mu+log(2.0*(u-0.5))/lambda;
+    }
+}
+
+
 
 // setup different types of splines for testing
 // which are at least "cont_deriv" times continuously differentiable
@@ -35,6 +68,13 @@ std::vector<tk::spline> setup_splines(const std::vector<double>& X,
         splines.back().set_boundary(tk::spline::second_deriv, 0.2,
                                     tk::spline::second_deriv, -0.3);
         splines.back().set_points(X,Y);
+        // not-a-knot cubic spline
+        if(X.size()>=4) {
+            splines.push_back(tk::spline());
+            splines.back().set_boundary(tk::spline::not_a_knot, 0.0,
+                                        tk::spline::not_a_knot, 0.0);
+            splines.back().set_points(X,Y);
+        }
     }
     if(cont_deriv<=1) {
         // C^1 splines
@@ -72,6 +112,13 @@ std::vector<tk::spline> setup_splines(const std::vector<double>& X,
         splines.back().set_boundary(tk::spline::first_deriv, 0.0,
                                     tk::spline::first_deriv, -1.2);
         splines.back().set_points(X,Y,tk::spline::cspline_hermite);
+        if(X.size()>=4) {
+            // cubic hermite spline: not-a-knot
+            splines.push_back(tk::spline());
+            splines.back().set_boundary(tk::spline::not_a_knot, 0.0,
+                                        tk::spline::not_a_knot, -1.2);
+            splines.back().set_points(X,Y,tk::spline::cspline_hermite);
+        }
     }
     if(cont_deriv<=0) {
         // C^0 splines
@@ -119,8 +166,8 @@ std::vector<double> evaluation_grid(const std::vector<double>& X,
 // checks spline is C^0, i.e. continuous and goes through all grid points
 BOOST_AUTO_TEST_CASE( Continuity )
 {
-    const double dx = 1e-15;        // step size to check continuity
-    const double max_deriv = 10.0;  // max 1st deriv of below spline
+    const double dx = 5e-15;        // step size to check continuity
+    const double max_deriv = 150.0; // max 1st deriv of below spline
     // using well posed grid data for spline interpolation
     std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
     std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
@@ -151,7 +198,7 @@ BOOST_AUTO_TEST_CASE( Continuity )
 BOOST_AUTO_TEST_CASE( Differentiability )
 {
     const double dx = 1e-15;        // step size to check continuity
-    const double h  = 2e-8;         // step size for finite differences
+    const double h  = 8e-8;         // step size for finite differences
     const double max_deriv = 100.0; // max 2nd deriv of below spline
     std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
     std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
@@ -187,7 +234,7 @@ BOOST_AUTO_TEST_CASE( Differentiability )
 BOOST_AUTO_TEST_CASE( Smoothness )
 {
     const double dx = 1e-15;        // step size to check continuity
-    const double h  = 3e-6;         // step size for finite differences
+    const double h  = 6e-6;         // step size for finite differences
     const double max_deriv = 1000.0;    // max 3nd deriv of below spline
     std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
     std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
@@ -224,7 +271,7 @@ BOOST_AUTO_TEST_CASE( ThirdDeriv )
     // 2nd derivative is piecewise linear, so we can use a larger
     // step size for finite differences for 3rd derivative
     const double h    = 1e-5;     // step size for finite differences
-    const double tol  = 1e-10;    // error tolerance in 3rd derivative
+    const double tol  = 2e-10;    // error tolerance in 3rd derivative
     std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
     std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
 
@@ -298,44 +345,88 @@ BOOST_AUTO_TEST_CASE( Monotonicity )
 
 BOOST_AUTO_TEST_CASE( BoundaryTypes )
 {
-    const double dx = 1e-5;        // step size to check continuity
+    const double dx = 1e-10;        // step size to check continuity
+    const double tol = 1e-14;       // error tolerance
     std::vector<double> X = {-10.2,  0.1,  0.8, 2.4,  3.1,  3.2, 4.7, 19.1};
     std::vector<double> Y = {  2.7, -1.2, -0.5, 1.5, -1.0, -0.7,  1.2, -1.3};
-    {
+    std::vector<tk::spline::spline_type> types = {tk::spline::cspline, tk::spline::cspline_hermite};
+
+    for(tk::spline::spline_type type : types) {
         // natural boundary conditions, i.e. 2nd derivative is zero
         tk::spline s;
-        s.set_points(X,Y);
-        BOOST_CHECK_CLOSE( s.deriv(2,X[0]-dx), 0.0, 0.0 );      // 2nd deriv = 0
-        BOOST_CHECK_CLOSE( s.deriv(2,X.back()+dx), 0.0, 0.0 );  // 2nd deriv = 0
+        s.set_points(X,Y,type);
+        BOOST_CHECK_SMALL( s.deriv(2,X[0]-dx), tol );       // 2nd deriv = 0
+        BOOST_CHECK_SMALL( s.deriv(2,X.back()+dx), tol );   // 2nd deriv = 0
     }
 
-    {
+    for(tk::spline::spline_type type : types) {
         // left and right with given 2nd and 1st derivative, respectively
         tk::spline s;
         double deriv1=1.3;
         double deriv2=-0.7;
         s.set_boundary(tk::spline::second_deriv, deriv2,
                        tk::spline::first_deriv, deriv1);
-        s.set_points(X,Y);
+        s.set_points(X,Y,type);
         BOOST_CHECK_CLOSE( s.deriv(2,X[0]), deriv2, 0.0 );
         BOOST_CHECK_CLOSE( s.deriv(2,X[0]-1.0), deriv2, 0.0 );
-        BOOST_CHECK_CLOSE( s.deriv(1,X.back()), deriv1, 1e-12);
-        BOOST_CHECK_CLOSE( s.deriv(1,X.back()+1.0), deriv1, 1e-12);
+        BOOST_CHECK_CLOSE( s.deriv(1,X.back()), deriv1, tol*100.0);
+        BOOST_CHECK_CLOSE( s.deriv(1,X.back()+1.0), deriv1, tol*100.0);
         BOOST_CHECK_CLOSE( s.deriv(2,X.back()+1.0), 0.0, 0.0);
     }
-    {
+    for(tk::spline::spline_type type : types) {
         // left and right with given 1st and 2nd derivative, respectively
         tk::spline s;
         double deriv1=-4.7;
         double deriv2=-1.2;
         s.set_boundary(tk::spline::first_deriv, deriv1,
                        tk::spline::second_deriv, deriv2);
-        s.set_points(X,Y);
+        s.set_points(X,Y,type);
         BOOST_CHECK_CLOSE( s.deriv(2,X.back()), deriv2, 0.0 );
         BOOST_CHECK_CLOSE( s.deriv(2,X.back()+1.0), deriv2, 0.0 );
-        BOOST_CHECK_CLOSE( s.deriv(1,X[0]), deriv1, 1e-12);
-        BOOST_CHECK_CLOSE( s.deriv(1,X[0]-1.0), deriv1, 1e-12);
+        BOOST_CHECK_CLOSE( s.deriv(1,X[0]), deriv1, tol*100.0);
+        BOOST_CHECK_CLOSE( s.deriv(1,X[0]-1.0), deriv1, tol*100.0);
         BOOST_CHECK_CLOSE( s.deriv(2,X[0]-1.0), 0.0, 0.0);
+    }
+
+    for(tk::spline::spline_type type : types) {
+        // left and right with not-a-knot condition
+        assert(X.size()>=4);
+        tk::spline s;
+        s.set_boundary(tk::spline::not_a_knot, 0.0,
+                       tk::spline::not_a_knot, 0.0);
+        s.set_points(X,Y,type);
+        // f''' is continuous around X[1] and X[n-2]
+        int n=(int) X.size();
+        BOOST_CHECK_SMALL( s.deriv(3,X[1]-dx)-s.deriv(3,X[1]+dx), tol );
+        BOOST_CHECK_SMALL( s.deriv(3,X[n-2]-dx)-s.deriv(3,X[n-2]+dx), tol );
+        // f'' continuous around X[0] and X[n-1]
+        BOOST_CHECK_SMALL( s.deriv(2,X[0]-dx)-s.deriv(2,X[0]+dx), 10.0*dx );
+        BOOST_CHECK_SMALL( s.deriv(2,X[n-1]-dx)-s.deriv(2,X[n-1]+dx), 10.0*dx );
+    }
+    {
+        // C^2 not-a-knot splines generated from cubic functions
+        // will be identical to the cubic function
+        double a=2.0, b=-2.7, c=-0.3, d=0.1;
+        for(size_t size : {4, 5, 6, 7, 20, 55, 57, 93, 121, 283}) {
+            std::vector<double> XX(size), YY(size);
+            XX[0]=rand_laplace();
+            YY[0]=f(a,b,c,d,XX[0]);
+            for(size_t i=1; i<size; i++) {
+                XX[i]=XX[i-1]+(1.0/size)*rand_exp();
+                YY[i]=f(a,b,c,d,XX[i]);
+            }
+            tk::spline s;
+            s.set_boundary(tk::spline::not_a_knot, 0.0,
+                           tk::spline::not_a_knot, 0.0);
+            s.set_points(XX,YY);
+            double xmin=XX.front();
+            double xmax=XX.back();
+            const int num_check=500;
+            for(int i=0; i<num_check; i++) {
+                double x=xmin+(xmax-xmin)*rand_unif();
+                BOOST_CHECK_SMALL( s(x)-f(a,b,c,d,x), 5.0*tol );
+            }
+        }
     }
 }
 
@@ -427,10 +518,6 @@ BOOST_AUTO_TEST_CASE( FunctionApproximation )
     }
 }
 
-double rand_unif()
-{
-    return (double)std::rand()/RAND_MAX;
-}
 
 // this test is intended to detect any numerical changes
 // and will require re-basing whenever a numerical change is expected
@@ -473,31 +560,10 @@ BOOST_AUTO_TEST_CASE( RegressionTest )
         }
     }
     //printf("sum=%.16e, mod=%.16f\n", sum, sum_mod);
-    BOOST_CHECK_CLOSE(sum, -298638197797.79303, 0.0);
-    BOOST_CHECK_CLOSE(sum_mod, 0.20285718270622555, 0.0);
+    BOOST_CHECK_CLOSE(sum, -1828701683606767.0, 0.0);
+    BOOST_CHECK_CLOSE(sum_mod, -0.61449084008178234, 0.0);
 }
 
-
-// double exponential distribution
-double rand_laplace(double lambda=1.0, double mu=0)
-{
-    double u = rand_unif();
-    if(u<=0.5) {
-        return mu-log(2.0*u)/lambda;
-    } else {
-        return mu+log(2.0*(u-0.5))/lambda;
-    }
-}
-
-// cubic function value and its first derivative
-double f(double a, double b, double c, double d, double x)
-{
-    return (((d*x) + c)*x + b)*x + a;
-}
-double f1(double b, double c, double d, double x)
-{
-    return ((3.0*d*x) + 2.0*c)*x + b;
-}
 
 // roots of cubic functions: test internal::solve_cubic()
 BOOST_AUTO_TEST_CASE( CubicRootFinding )
