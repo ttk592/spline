@@ -724,3 +724,60 @@ BOOST_AUTO_TEST_CASE( SplineSolve )
         }
     }
 }
+BOOST_AUTO_TEST_CASE( SplineSolve2 )
+{
+    const double max_func = 2e-12;  // f(numerical root) <= max_func+noise
+    const double dy = 2e-15;        // change in right hand side: y=y+dy
+    const int loops = 100;
+
+    std::vector<double> X = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14};
+    std::vector<double> Y = {0, 1, 2, 1, 2, 1, 2, 1, 2,  0,  2,  0};
+
+    // setup all possible types of splines which are at least C^0
+
+    const double y=1.0;
+    {
+        tk::spline s(X,Y, tk::spline::cspline);
+        for(int i=-loops/2; i<loops/2; i++) {
+            BOOST_TEST_CONTEXT("spline: C2: f(x)=" << y << " + " << (dy*i)) {
+            std::vector<double> root = s.solve(y+i*dy);
+            BOOST_CHECK(root.size()==10);
+            if(i==0) {
+                BOOST_CHECK(std::find(root.begin(),root.end(),1.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),3.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),5.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),7.0)!=root.end());
+            }
+            for(size_t i=0; i<root.size(); i++) {
+                double y0 = s(root[i]);
+                BOOST_CHECK_SMALL(y0-y, max_func);
+            }
+            } // BOOST_TEST_CONTEXT
+        }
+    }
+    {
+        tk::spline s(X,Y, tk::spline::cspline_hermite);
+        for(int i=-loops/2; i<loops/2; i++) {
+            BOOST_TEST_CONTEXT("spline: C1 Hermite: f(x)=" << y << " + " << (dy*i)) {
+            std::vector<double> root = s.solve(y+i*dy);
+            if(i<0) {
+                BOOST_CHECK(root.size()==4);
+            } else if(i==0) {
+                BOOST_CHECK(root.size()==7);
+            } else {
+                BOOST_CHECK(root.size()==10);
+            }
+            if(i==0) {
+                BOOST_CHECK(std::find(root.begin(),root.end(),1.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),3.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),5.0)!=root.end());
+                BOOST_CHECK(std::find(root.begin(),root.end(),7.0)!=root.end());
+            }
+            for(size_t i=0; i<root.size(); i++) {
+                double y0 = s(root[i]);
+                BOOST_CHECK_SMALL(y0-y, max_func);
+            }
+            } // BOOST_TEST_CONTEXT
+        }
+    }
+}

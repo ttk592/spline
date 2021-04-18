@@ -188,6 +188,8 @@ public:
 
 };
 
+double get_eps();
+
 std::vector<double> solve_cubic(double a, double b, double c, double d,
                                 int newton_iter=0);
 
@@ -569,10 +571,17 @@ std::vector<double> spline::solve(double y, bool ignore_extrapolation) const
     // brute force check if piecewise cubic has roots in their resp. segment
     // TODO: make more efficient
     for(size_t i=0; i<n-1; i++) {
-        root = internal::solve_cubic(m_y[i]-y,m_b[i],m_c[i],m_d[i],2);
+        root = internal::solve_cubic(m_y[i]-y,m_b[i],m_c[i],m_d[i],1);
         for(size_t j=0; j<root.size(); j++) {
-            if( (0.0<=root[j]) && (root[j]<m_x[i+1]-m_x[i]) ) {
-                x.push_back(m_x[i]+root[j]);
+            double h = (i>0) ? (m_x[i]-m_x[i-1]) : 0.0;
+            double eps = internal::get_eps()*512.0*std::min(h,1.0);
+            if( (-eps<=root[j]) && (root[j]<m_x[i+1]-m_x[i]) ) {
+                double new_root = m_x[i]+root[j];
+                if(x.size()>0 && x.back()+eps > new_root) {
+                    x.back()=new_root;      // avoid spurious duplicate roots
+                } else {
+                    x.push_back(new_root);
+                }
             }
         }
     }
@@ -905,6 +914,20 @@ std::vector<double> solve_cubic(double a, double b, double c, double d,
                 z[i] -= f/f1;
             }
         }
+    }
+    // ensure if a=0 we get exactly x=0 as root
+    // TODO: remove this fudge
+    if(a==0.0) {
+        assert(z.size()>0);     // cubic should always have at least one root
+        double xmin=fabs(z[0]);
+        size_t imin=0;
+        for(size_t i=1; i<z.size(); i++) {
+            if(xmin>fabs(z[i])) {
+                xmin=fabs(z[i]);
+                imin=i;
+            }
+        }
+        z[imin]=0.0;        // replace the smallest absolute value with 0
     }
     std::sort(z.begin(), z.end());
     return z;
