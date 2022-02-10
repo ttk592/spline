@@ -597,7 +597,7 @@ std::vector<double> spline::solve(double y, bool ignore_extrapolation) const
     }
 
     return x;
-};
+}
 
 
 #ifdef HAVE_SSTREAM
