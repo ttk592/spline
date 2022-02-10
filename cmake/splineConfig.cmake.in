@@ -1,0 +1,6 @@
+get_filename_component(spline_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+include("${spline_CMAKE_DIR}/splineTargets.cmake")
+
+get_target_property(spline_INCLUDE_DIRS spline INTERFACE_INCLUDE_DIRECTORIES)
+
