@@ -109,6 +109,7 @@ public:
             this->make_monotonic();
         }
     }
+    ~spline() = default;
 
 
     // modify boundary conditions: if called it must be before set_points()
