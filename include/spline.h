@@ -109,6 +109,7 @@ public:
             this->make_monotonic();
         }
     }
+    ~spline() = default;
 
 
     // modify boundary conditions: if called it must be before set_points()
@@ -597,7 +598,7 @@ std::vector<double> spline::solve(double y, bool ignore_extrapolation) const
     }
 
     return x;
-};
+}
 
 
 #ifdef HAVE_SSTREAM
