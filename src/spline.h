@@ -29,6 +29,9 @@
 
 #include <cstdio>
 #include <cassert>
+#ifdef _MSC_VER
+#define _USE_MATH_DEFINES
+#endif
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -41,8 +44,10 @@
 // (we get them because we have implementations in the header file,
 // and this is because we want to be able to quickly separate them
 // into a cpp file if necessary)
+#if !defined(_MSC_VER)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 
 // unnamed namespace only because the implementation is in this
 // header file and we don't want to export symbols to the obj files
@@ -642,7 +647,7 @@ void band_matrix::resize(int dim, int n_u, int n_l)
 int band_matrix::dim() const
 {
     if(m_upper.size()>0) {
-        return m_upper[0].size();
+        return (int)m_upper[0].size();
     } else {
         return 0;
     }
@@ -942,6 +947,8 @@ std::vector<double> solve_cubic(double a, double b, double c, double d,
 
 } // namespace
 
+#if !defined(_MSC_VER)
 #pragma GCC diagnostic pop
+#endif
 
 #endif /* TK_SPLINE_H */
