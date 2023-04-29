@@ -244,7 +244,10 @@ void spline::set_points(const std::vector<double>& x,
                         spline_type type)
 {
     assert(x.size()==y.size());
-    assert(x.size()>=3);
+    if(type==linear)
+        assert(x.size()>=2);
+    else
+        assert(x.size()>=3);
     // not-a-knot with 3 points has many solutions
     if(m_left==not_a_knot || m_right==not_a_knot)
         assert(x.size()>=4);
